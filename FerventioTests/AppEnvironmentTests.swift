@@ -7,25 +7,59 @@ struct AppEnvironmentTests {
     @Test
     func startMovesApplicationToSignedOutStateWithoutStoredSession() async {
         let service = StubAuthService(restoreResult: nil)
-        let environment = AppEnvironment(authService: service)
+        let environment = AppEnvironment(
+            authService: service,
+            twitchBootstrap: StubTwitchBootstrap()
+        )
 
         await environment.start()
 
         #expect(environment.state == .signedOut)
         #expect(environment.session == nil)
+        #expect(environment.currentUser == nil)
     }
 
     @Test
-    func signInPublishesTwitchSession() async {
+    func signInPublishesTwitchSessionAndCurrentUser() async {
         let grant = makeGrant()
+        let user = TwitchUser(
+            id: grant.accessLease.session.userID,
+            login: grant.accessLease.session.login,
+            displayName: "Test User",
+            profileImageURL: nil,
+            createdAt: nil,
+            broadcasterType: nil,
+            description: nil
+        )
         let service = StubAuthService(restoreResult: nil, signInResult: grant)
-        let environment = AppEnvironment(authService: service)
+        let environment = AppEnvironment(
+            authService: service,
+            twitchBootstrap: StubTwitchBootstrap(user: user)
+        )
         await environment.start()
 
         await environment.signIn()
 
         #expect(environment.state == .signedIn)
         #expect(environment.session == grant.accessLease.session)
+        #expect(environment.currentUser == user)
+    }
+
+    @Test
+    func profileBootstrapFailureDoesNotDiscardAuthenticatedSession() async {
+        let grant = makeGrant()
+        let service = StubAuthService(restoreResult: grant, signInResult: grant)
+        let environment = AppEnvironment(
+            authService: service,
+            twitchBootstrap: StubTwitchBootstrap(shouldFail: true)
+        )
+
+        await environment.start()
+
+        #expect(environment.state == .signedIn)
+        #expect(environment.session == grant.accessLease.session)
+        #expect(environment.currentUser == nil)
+        #expect(!environment.showsAuthenticationError)
     }
 
     private func makeGrant() -> AuthenticationGrant {
@@ -95,4 +129,37 @@ private final class StubAuthService: Authenticating {
     }
 
     func signOut() async throws {}
+}
+
+private struct StubTwitchBootstrap: TwitchBootstrapping, Sendable {
+    let user: TwitchUser?
+    let shouldFail: Bool
+
+    init(user: TwitchUser? = nil, shouldFail: Bool = false) {
+        self.user = user
+        self.shouldFail = shouldFail
+    }
+
+    func loadCurrentUser(for grant: AuthenticationGrant) async throws -> TwitchUser {
+        if shouldFail {
+            throw BootstrapFailure.failed
+        }
+        return user ?? TwitchUser(
+            id: grant.accessLease.session.userID,
+            login: grant.accessLease.session.login,
+            displayName: grant.accessLease.session.login,
+            profileImageURL: nil,
+            createdAt: nil,
+            broadcasterType: nil,
+            description: nil
+        )
+    }
+
+    func resolveChannel(login: String, for grant: AuthenticationGrant) async throws -> ChatChannel {
+        ChatChannel(id: "channel", login: login, displayName: login)
+    }
+}
+
+private enum BootstrapFailure: Swift.Error, Sendable {
+    case failed
 }

@@ -6,14 +6,21 @@ import Observation
 final class AppEnvironment {
     var state: AppState = .launching
     var session: TwitchSession?
+    var currentUser: TwitchUser?
     var isAuthorizing = false
     var isSigningOut = false
     var showsAuthenticationError = false
 
-    private let authService: any Authenticating
+    @ObservationIgnored private let authService: any Authenticating
+    @ObservationIgnored private let twitchBootstrap: any TwitchBootstrapping
+    @ObservationIgnored private var authenticationGrant: AuthenticationGrant?
 
-    init(authService: (any Authenticating)? = nil) {
+    init(
+        authService: (any Authenticating)? = nil,
+        twitchBootstrap: (any TwitchBootstrapping)? = nil
+    ) {
         self.authService = authService ?? AuthService.live()
+        self.twitchBootstrap = twitchBootstrap ?? TwitchBootstrapService()
     }
 
     func start() async {
@@ -22,12 +29,13 @@ final class AppEnvironment {
         }
         do {
             if let grant = try await authService.restoreAuthentication() {
-                session = grant.accessLease.session
-                state = .signedIn
+                apply(grant)
+                await loadCurrentUser(for: grant)
             } else {
                 state = .signedOut
             }
         } catch {
+            clearSession()
             state = .signedOut
             showsAuthenticationError = true
         }
@@ -43,8 +51,8 @@ final class AppEnvironment {
 
         do {
             let grant = try await authService.signIn()
-            session = grant.accessLease.session
-            state = .signedIn
+            apply(grant)
+            await loadCurrentUser(for: grant)
         } catch {
             showsAuthenticationError = true
         }
@@ -59,10 +67,26 @@ final class AppEnvironment {
 
         do {
             try await authService.signOut()
-            session = nil
+            clearSession()
             state = .signedOut
         } catch {
             showsAuthenticationError = true
         }
+    }
+
+    private func apply(_ grant: AuthenticationGrant) {
+        authenticationGrant = grant
+        session = grant.accessLease.session
+        state = .signedIn
+    }
+
+    private func loadCurrentUser(for grant: AuthenticationGrant) async {
+        currentUser = try? await twitchBootstrap.loadCurrentUser(for: grant)
+    }
+
+    private func clearSession() {
+        authenticationGrant = nil
+        session = nil
+        currentUser = nil
     }
 }

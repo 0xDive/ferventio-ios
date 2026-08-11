@@ -99,9 +99,7 @@ public struct TwitchAPIClient: Sendable {
     }
 
     public func getUserByLogin(clientID: String, token: String, login: String) async throws -> TwitchUser {
-        let normalized = login.trimmingCharacters(in: .whitespacesAndNewlines)
-            .trimmingCharacters(in: CharacterSet(charactersIn: "@"))
-            .lowercased()
+        let normalized = normalizeLogin(login)
         guard !normalized.isEmpty else {
             throw Error.userNotFound
         }
@@ -113,6 +111,32 @@ public struct TwitchAPIClient: Sendable {
             throw Error.userNotFound
         }
         return user
+    }
+
+    public func getChannel(clientID: String, token: String, login: String) async throws -> ChatChannel {
+        let user = try await getUserByLogin(clientID: clientID, token: token, login: login)
+        return channel(from: user)
+    }
+
+    public func getChannelsByLogins(
+        clientID: String,
+        token: String,
+        logins: [String]
+    ) async throws -> [ChatChannel] {
+        var seen = Set<String>()
+        let normalized = logins
+            .map(normalizeLogin)
+            .filter { !$0.isEmpty && seen.insert($0).inserted }
+            .prefix(100)
+        guard !normalized.isEmpty else {
+            return []
+        }
+        let users = try await getUsers(
+            clientID: clientID,
+            token: token,
+            queryItems: normalized.map { URLQueryItem(name: "login", value: $0) }
+        )
+        return users.map { channel(from: $0) }
     }
 
     private func getUsers(
@@ -144,6 +168,26 @@ public struct TwitchAPIClient: Sendable {
                 description: user.description
             )
         }
+    }
+
+    private func channel(from user: TwitchUser) -> ChatChannel {
+        ChatChannel(
+            id: user.id,
+            login: user.login,
+            displayName: user.displayName,
+            profileImageURL: user.profileImageURL
+        )
+    }
+
+    private func normalizeLogin(_ raw: String) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let withoutPrefix: Substring
+        if trimmed.first == "@" || trimmed.first == "#" {
+            withoutPrefix = trimmed.dropFirst()
+        } else {
+            withoutPrefix = Substring(trimmed)
+        }
+        return withoutPrefix.lowercased()
     }
 
     private func perform<Response: Decodable & Sendable>(_ request: URLRequest) async throws -> Response {

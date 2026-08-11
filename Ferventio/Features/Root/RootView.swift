@@ -56,13 +56,11 @@ struct RootView: View {
 
     private var signedInView: some View {
         VStack(spacing: 16) {
-            Image(systemName: "person.crop.circle.badge.checkmark")
-                .font(.system(size: 52))
-                .accessibilityHidden(true)
-            Text("auth.signed_in.title")
+            profileImage
+            Text(environment.currentUser?.displayName ?? environment.session?.login ?? "")
                 .font(.title2.weight(.semibold))
             if let login = environment.session?.login {
-                Text(login)
+                Text("@\(login)")
                     .foregroundStyle(.secondary)
             }
             Button("auth.sign_out", role: .destructive) {
@@ -71,5 +69,25 @@ struct RootView: View {
             .disabled(environment.isSigningOut)
         }
         .padding()
+    }
+
+    @ViewBuilder
+    private var profileImage: some View {
+        if let rawURL = environment.currentUser?.profileImageURL,
+           let url = URL(string: rawURL) {
+            AsyncImage(url: url) { image in
+                image
+                    .resizable()
+                    .scaledToFill()
+            } placeholder: {
+                ProgressView()
+            }
+            .frame(width: 72, height: 72)
+            .clipShape(Circle())
+        } else {
+            Image(systemName: "person.crop.circle.badge.checkmark")
+                .font(.system(size: 52))
+                .accessibilityHidden(true)
+        }
     }
 }
