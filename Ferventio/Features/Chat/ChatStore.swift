@@ -44,6 +44,7 @@ final class ChatStore {
     private(set) var messages: [ChatMessage] = []
     private(set) var connectionState: ConnectionState = .disconnected
     private(set) var isSending = false
+    private(set) var replyTarget: ChatMessage?
     var showsConnectionError = false
     var showsSendError = false
 
@@ -96,6 +97,7 @@ final class ChatStore {
             profileImageURL: currentUser?.profileImageURL
         )
         messages.removeAll(keepingCapacity: true)
+        replyTarget = nil
         connectionState = .connecting
         showsConnectionError = false
         showsSendError = false
@@ -131,11 +133,25 @@ final class ChatStore {
         localAuthor = nil
         messages.removeAll(keepingCapacity: false)
         composerText = ""
+        replyTarget = nil
         isSending = false
         connectionState = .disconnected
     }
 
-    func sendCurrentMessage(replyParentMessageID: String? = nil) async {
+    func beginReply(to message: ChatMessage) {
+        guard replyParentID(for: message) != nil,
+              message.outgoingState != .sending,
+              message.outgoingState != .failed else {
+            return
+        }
+        replyTarget = message
+    }
+
+    func cancelReply() {
+        replyTarget = nil
+    }
+
+    func sendCurrentMessage() async {
         guard canSend,
               let channel,
               let lease = activeLease,
@@ -144,6 +160,8 @@ final class ChatStore {
         }
 
         let text = composerText
+        let selectedReply = replyTarget
+        let replyParentMessageID = selectedReply.flatMap { replyParentID(for: $0) }
         let nonce = UUID().uuidString.lowercased()
         let now = Date()
         let localMessage = ChatMessage(
@@ -154,11 +172,13 @@ final class ChatStore {
             text: text,
             timestamp: ISO8601DateFormatter().string(from: now),
             timestampMilliseconds: Int64((now.timeIntervalSince1970 * 1_000).rounded(.towardZero)),
+            reply: makeLocalReplyContext(message: selectedReply, parentID: replyParentMessageID),
             outgoingState: .sending,
             clientNonce: nonce
         )
 
         composerText = ""
+        replyTarget = nil
         isSending = true
         showsSendError = false
         messages.append(localMessage)
@@ -281,6 +301,35 @@ final class ChatStore {
             state: state,
             serverMessageID: serverMessageID,
             error: error
+        )
+    }
+
+    private func replyParentID(for message: ChatMessage) -> String? {
+        if let serverMessageID = message.serverMessageID?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           !serverMessageID.isEmpty {
+            return serverMessageID
+        }
+        let id = message.id.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !id.isEmpty, !id.hasPrefix("local-") else {
+            return nil
+        }
+        return id
+    }
+
+    private func makeLocalReplyContext(
+        message: ChatMessage?,
+        parentID: String?
+    ) -> ReplyContext? {
+        guard let message, let parentID else {
+            return nil
+        }
+        return ReplyContext(
+            parentMessageID: parentID,
+            parentMessageBody: message.text,
+            parentUserID: message.author.id,
+            parentUserLogin: message.author.login,
+            parentUserName: message.author.displayName
         )
     }
 

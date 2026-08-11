@@ -93,6 +93,33 @@ struct ChatStoreTests {
         await store.disconnect()
     }
 
+    @Test
+    func replyUsesServerParentIDAndCarriesLocalReplyContext() async {
+        let eventSub = StubEventSubChatClient()
+        let sender = StubChatMessageSender(
+            result: ChatSendResult(messageID: "server-reply", isSent: true, dropReason: nil)
+        )
+        let store = ChatStore(client: eventSub, sender: sender)
+
+        await store.connect(
+            channel: makeChannel(),
+            lease: makeLease(),
+            currentUser: makeCurrentUser()
+        )
+        let parent = makeMessage(10, id: "parent-1", text: "Parent message")
+        store.apply(.message(parent))
+        store.beginReply(to: parent)
+        store.composerText = "Reply body"
+
+        await store.sendCurrentMessage()
+
+        #expect(await sender.recordedReplyParentMessageID() == "parent-1")
+        #expect(store.replyTarget == nil)
+        #expect(store.messages.last?.reply?.parentMessageID == "parent-1")
+        #expect(store.messages.last?.reply?.parentMessageBody == "Parent message")
+        await store.disconnect()
+    }
+
     private func makeMessage(
         _ index: Int,
         id: String? = nil,
@@ -169,6 +196,7 @@ private actor StubEventSubChatClient: EventSubChatStreaming {
 
 private actor StubChatMessageSender: ChatMessageSending {
     let result: ChatSendResult
+    private var replyParentMessageID: String?
 
     init(result: ChatSendResult) {
         self.result = result
@@ -182,6 +210,11 @@ private actor StubChatMessageSender: ChatMessageSending {
         message: String,
         replyParentMessageID: String?
     ) async throws -> ChatSendResult {
-        result
+        self.replyParentMessageID = replyParentMessageID
+        return result
+    }
+
+    func recordedReplyParentMessageID() -> String? {
+        replyParentMessageID
     }
 }

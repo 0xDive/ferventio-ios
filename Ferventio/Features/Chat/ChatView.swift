@@ -72,8 +72,10 @@ struct ChatView: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 8) {
                         ForEach(store.messages) { message in
-                            ChatMessageRow(message: message)
-                                .id(message.id)
+                            ChatMessageRow(message: message) {
+                                store.beginReply(to: message)
+                            }
+                            .id(message.id)
                         }
                     }
                     .padding(.horizontal, 12)
@@ -88,30 +90,56 @@ struct ChatView: View {
     }
 
     private var composerBar: some View {
-        HStack(alignment: .bottom, spacing: 10) {
-            TextField("chat.composer.placeholder", text: $store.composerText, axis: .vertical)
-                .lineLimit(1...4)
-                .submitLabel(.send)
-                .disabled(store.connectionState != .connected)
-                .onSubmit {
-                    Task { await store.sendCurrentMessage() }
+        VStack(spacing: 0) {
+            if let replyTarget = store.replyTarget {
+                HStack(spacing: 8) {
+                    Image(systemName: "arrowshape.turn.up.left")
+                        .foregroundStyle(.secondary)
+                    Text(replyTarget.author.displayName)
+                        .font(.caption.weight(.semibold))
+                        .lineLimit(1)
+                    Text(replyTarget.text)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                    Button {
+                        store.cancelReply()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .accessibilityLabel(Text("chat.reply.cancel"))
+                    }
+                    .buttonStyle(.borderless)
                 }
-
-            Button {
-                Task { await store.sendCurrentMessage() }
-            } label: {
-                if store.isSending {
-                    ProgressView()
-                } else {
-                    Image(systemName: "paperplane.fill")
-                        .accessibilityLabel(Text("chat.send"))
-                }
+                .padding(.horizontal)
+                .padding(.top, 8)
             }
-            .buttonStyle(.borderless)
-            .disabled(!store.canSend)
+
+            HStack(alignment: .bottom, spacing: 10) {
+                TextField("chat.composer.placeholder", text: $store.composerText, axis: .vertical)
+                    .lineLimit(1...4)
+                    .submitLabel(.send)
+                    .disabled(store.connectionState != .connected)
+                    .onSubmit {
+                        Task { await store.sendCurrentMessage() }
+                    }
+
+                Button {
+                    Task { await store.sendCurrentMessage() }
+                } label: {
+                    if store.isSending {
+                        ProgressView()
+                    } else {
+                        Image(systemName: "paperplane.fill")
+                            .accessibilityLabel(Text("chat.send"))
+                    }
+                }
+                .buttonStyle(.borderless)
+                .disabled(!store.canSend)
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 10)
         }
-        .padding(.horizontal)
-        .padding(.vertical, 10)
     }
 
     private var emptyTitleKey: String.LocalizationValue {
@@ -154,6 +182,7 @@ struct ChatView: View {
 
 private struct ChatMessageRow: View {
     let message: ChatMessage
+    let onReply: () -> Void
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
@@ -194,5 +223,13 @@ private struct ChatMessageRow: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
+        .contextMenu {
+            Button {
+                onReply()
+            } label: {
+                Label("chat.reply", systemImage: "arrowshape.turn.up.left")
+            }
+            .disabled(message.outgoingState == .sending || message.outgoingState == .failed)
+        }
     }
 }

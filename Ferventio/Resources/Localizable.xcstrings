@@ -139,6 +139,18 @@
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "Отправка сообщения" } }
       }
     },
+    "chat.reply" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Reply" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Ответить" } }
+      }
+    },
+    "chat.reply.cancel" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Cancel reply" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Отменить ответ" } }
+      }
+    },
     "chat.send" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Send" } },
