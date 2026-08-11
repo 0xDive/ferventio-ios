@@ -38,6 +38,9 @@ final class ChatStore {
 
     static let maximumMessages = 2_000
     static let maximumMessageCharacters = 500
+    static let initialHistoryMessages = 500
+    static let maximumPersistedMessagesPerChannel = 5_000
+    static let defaultHistoryRetentionMilliseconds: Int64 = 7 * 24 * 60 * 60 * 1_000
 
     var channelInput = ""
     var composerText = ""
@@ -59,6 +62,7 @@ final class ChatStore {
 
     @ObservationIgnored private let client: any EventSubChatStreaming
     @ObservationIgnored private let sender: any ChatMessageSending
+    @ObservationIgnored private let history: any ChatHistoryPersisting
     @ObservationIgnored private var receiveTask: Task<Void, Never>?
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var activeLease: TwitchAccessLease?
@@ -67,10 +71,12 @@ final class ChatStore {
 
     init(
         client: (any EventSubChatStreaming)? = nil,
-        sender: (any ChatMessageSending)? = nil
+        sender: (any ChatMessageSending)? = nil,
+        history: (any ChatHistoryPersisting)? = nil
     ) {
         self.client = client ?? TwitchEventSubChatClient()
         self.sender = sender ?? TwitchChatAPIClient()
+        self.history = history ?? NoopChatHistory()
     }
 
     func prepareDefaultChannel(login: String) {
@@ -89,6 +95,7 @@ final class ChatStore {
         receiveTask?.cancel()
         receiveTask = nil
         await client.disconnect()
+        await history.flush()
 
         self.channel = channel
         activeLease = lease
@@ -99,11 +106,29 @@ final class ChatStore {
             profileImageURL: currentUser?.profileImageURL
         )
         thirdPartyEmoteCatalog = ThirdPartyEmoteCatalog(emotes: [])
-        messages.removeAll(keepingCapacity: true)
         replyTarget = nil
         connectionState = .connecting
         showsConnectionError = false
         showsSendError = false
+
+        let nowMilliseconds = Int64((Date().timeIntervalSince1970 * 1_000).rounded(.towardZero))
+        let retentionBoundary = max(
+            0,
+            nowMilliseconds - Self.defaultHistoryRetentionMilliseconds
+        )
+        await history.maintain(
+            channelID: channel.id,
+            olderThanTimestampMilliseconds: retentionBoundary,
+            keepingLatest: Self.maximumPersistedMessagesPerChannel
+        )
+        let restoredMessages = await history.recentMessages(
+            channelID: channel.id,
+            limit: Self.initialHistoryMessages
+        )
+        guard generation == currentGeneration else {
+            return
+        }
+        messages = Array(restoredMessages.suffix(Self.maximumMessages))
 
         do {
             _ = try await client.connect(channel: channel, lease: lease)
@@ -139,6 +164,7 @@ final class ChatStore {
         receiveTask?.cancel()
         receiveTask = nil
         await client.disconnect()
+        await history.flush()
         connectionState = .suspended
     }
 
@@ -175,6 +201,7 @@ final class ChatStore {
         receiveTask?.cancel()
         receiveTask = nil
         await client.disconnect()
+        await history.flush()
         channel = nil
         activeLease = nil
         localAuthor = nil
@@ -272,6 +299,12 @@ final class ChatStore {
             while !Task.isCancelled && self.generation == currentGeneration {
                 do {
                     let event = try await self.client.nextEvent()
+                    guard self.generation == currentGeneration else {
+                        return
+                    }
+                    if case let .message(message) = event {
+                        await self.history.enqueue(message)
+                    }
                     guard self.generation == currentGeneration else {
                         return
                     }
