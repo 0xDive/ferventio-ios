@@ -1,0 +1,277 @@
+import FerventioDomain
+import SwiftUI
+
+struct ChatMessageRow: View {
+    let message: ChatMessage
+    let badgeAssets: [String: ChatBadgeAsset]
+    let onReply: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if let reply = message.reply,
+               let parentName = reply.parentUserName ?? reply.parentUserLogin {
+                Text("↪ \(parentName)")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            HStack(spacing: 4) {
+                ForEach(resolvedBadges) { asset in
+                    if let url = ChatAssetResolver.preferredBadgeImageURL(asset) {
+                        AsyncImage(url: url) { image in
+                            image
+                                .resizable()
+                                .scaledToFit()
+                        } placeholder: {
+                            Color.clear
+                        }
+                        .frame(width: 18, height: 18)
+                        .accessibilityLabel(Text(asset.title ?? asset.setID))
+                    }
+                }
+
+                Text(message.author.displayName)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(authorColor)
+                    .lineLimit(1)
+
+                Spacer(minLength: 4)
+
+                outgoingIndicator
+            }
+
+            ChatFragmentFlow(fragments: message.fragments)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contextMenu {
+            Button {
+                onReply()
+            } label: {
+                Label("chat.reply", systemImage: "arrowshape.turn.up.left")
+            }
+            .disabled(message.outgoingState == .sending || message.outgoingState == .failed)
+        }
+    }
+
+    private var resolvedBadges: [ChatBadgeAsset] {
+        message.author.badges.compactMap {
+            ChatAssetResolver.badgeAsset(for: $0, assets: badgeAssets)
+        }
+    }
+
+    private var authorColor: Color {
+        Color(twitchHex: message.author.color) ?? .primary
+    }
+
+    @ViewBuilder
+    private var outgoingIndicator: some View {
+        switch message.outgoingState {
+        case .sending:
+            ProgressView()
+                .controlSize(.mini)
+                .accessibilityLabel(Text("chat.message.sending"))
+        case .failed:
+            Image(systemName: "exclamationmark.circle.fill")
+                .foregroundStyle(.red)
+                .accessibilityLabel(Text("chat.message.failed"))
+        case .none, .sent:
+            EmptyView()
+        }
+    }
+}
+
+private struct ChatFragmentFlow: View {
+    let fragments: [ChatFragment]
+
+    var body: some View {
+        ChatFlowLayout(spacing: 3) {
+            ForEach(Array(fragments.enumerated()), id: \.offset) { _, fragment in
+                ChatFragmentView(fragment: fragment)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct ChatFragmentView: View {
+    let fragment: ChatFragment
+
+    var body: some View {
+        switch fragment {
+        case let .text(text):
+            Text(text)
+                .font(.body)
+                .textSelection(.enabled)
+
+        case let .twitchEmote(text, emoteID, _, _, formats):
+            RemoteChatImage(
+                url: ChatAssetResolver.twitchEmoteURL(
+                    emoteID: emoteID,
+                    formats: formats,
+                    animate: false,
+                    scale: .medium
+                ),
+                fallbackText: text,
+                accessibilityLabel: text
+            )
+
+        case let .thirdPartyEmote(text, _, _, _, imageURL, _):
+            RemoteChatImage(
+                url: ChatAssetResolver.absoluteImageURL(imageURL),
+                fallbackText: text,
+                accessibilityLabel: text
+            )
+
+        case let .gif(text, _, url):
+            RemoteChatImage(
+                url: ChatAssetResolver.absoluteImageURL(url),
+                fallbackText: text,
+                accessibilityLabel: text
+            )
+
+        case let .mention(text, _, _, _):
+            Text(text)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(Color.accentColor)
+                .textSelection(.enabled)
+
+        case let .cheermote(text, _, _, _):
+            Text(text)
+                .font(.body.weight(.semibold))
+                .textSelection(.enabled)
+
+        case let .link(text, url):
+            if let destination = URL(string: url) {
+                Link(text, destination: destination)
+                    .font(.body)
+            } else {
+                Text(text)
+                    .font(.body)
+            }
+
+        case let .unknown(text, _):
+            Text(text)
+                .font(.body)
+                .textSelection(.enabled)
+        }
+    }
+}
+
+private struct RemoteChatImage: View {
+    let url: URL?
+    let fallbackText: String
+    let accessibilityLabel: String
+
+    var body: some View {
+        if let url {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case let .success(image):
+                    image
+                        .resizable()
+                        .scaledToFit()
+                case .failure:
+                    Text(fallbackText)
+                        .font(.body)
+                case .empty:
+                    ProgressView()
+                        .controlSize(.mini)
+                @unknown default:
+                    Text(fallbackText)
+                        .font(.body)
+                }
+            }
+            .frame(width: 28, height: 28)
+            .accessibilityLabel(Text(accessibilityLabel))
+        } else {
+            Text(fallbackText)
+                .font(.body)
+        }
+    }
+}
+
+private struct ChatFlowLayout: Layout {
+    var spacing: CGFloat
+
+    func sizeThatFits(
+        proposal: ProposedViewSize,
+        subviews: Subviews,
+        cache: inout ()
+    ) -> CGSize {
+        let maxWidth = proposal.width ?? .greatestFiniteMagnitude
+        var currentWidth: CGFloat = 0
+        var maximumWidth: CGFloat = 0
+        var currentRowHeight: CGFloat = 0
+        var totalHeight: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(ProposedViewSize(width: maxWidth, height: nil))
+            let additionalWidth = currentWidth == 0 ? size.width : spacing + size.width
+            if currentWidth > 0 && currentWidth + additionalWidth > maxWidth {
+                maximumWidth = max(maximumWidth, currentWidth)
+                totalHeight += currentRowHeight + spacing
+                currentWidth = size.width
+                currentRowHeight = size.height
+            } else {
+                currentWidth += additionalWidth
+                currentRowHeight = max(currentRowHeight, size.height)
+            }
+        }
+
+        maximumWidth = max(maximumWidth, currentWidth)
+        totalHeight += currentRowHeight
+        let resolvedWidth = proposal.width.map { min($0, maximumWidth) } ?? maximumWidth
+        return CGSize(width: resolvedWidth, height: totalHeight)
+    }
+
+    func placeSubviews(
+        in bounds: CGRect,
+        proposal: ProposedViewSize,
+        subviews: Subviews,
+        cache: inout ()
+    ) {
+        var x = bounds.minX
+        var y = bounds.minY
+        var rowHeight: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(ProposedViewSize(width: bounds.width, height: nil))
+            let nextX = x == bounds.minX ? x + size.width : x + spacing + size.width
+            if x > bounds.minX && nextX > bounds.maxX {
+                x = bounds.minX
+                y += rowHeight + spacing
+                rowHeight = 0
+            } else if x > bounds.minX {
+                x += spacing
+            }
+
+            subview.place(
+                at: CGPoint(x: x, y: y),
+                anchor: .topLeading,
+                proposal: ProposedViewSize(width: size.width, height: size.height)
+            )
+            x += size.width
+            rowHeight = max(rowHeight, size.height)
+        }
+    }
+}
+
+private extension Color {
+    init?(twitchHex: String?) {
+        guard var hex = twitchHex?.trimmingCharacters(in: .whitespacesAndNewlines), !hex.isEmpty else {
+            return nil
+        }
+        if hex.hasPrefix("#") {
+            hex.removeFirst()
+        }
+        guard hex.count == 6, let value = UInt64(hex, radix: 16) else {
+            return nil
+        }
+        self.init(
+            red: Double((value >> 16) & 0xFF) / 255,
+            green: Double((value >> 8) & 0xFF) / 255,
+            blue: Double(value & 0xFF) / 255
+        )
+    }
+}
