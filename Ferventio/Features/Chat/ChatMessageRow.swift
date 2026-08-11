@@ -85,12 +85,117 @@ private struct ChatFragmentFlow: View {
     let fragments: [ChatFragment]
 
     var body: some View {
+        let composition = BttvEmoteCompositionPlanner.build(fragments: fragments)
         ChatFlowLayout(spacing: 3) {
-            ForEach(Array(fragments.enumerated()), id: \.offset) { _, fragment in
-                ChatFragmentView(fragment: fragment)
+            ForEach(fragments.indices, id: \.self) { index in
+                if !composition.hiddenFragmentIndices.contains(index) {
+                    if let group = composition.group(forBaseFragment: index) {
+                        BttvComposedEmoteView(
+                            base: fragments[index],
+                            overlays: group.overlayFragmentIndices.compactMap { overlayIndex in
+                                fragments.indices.contains(overlayIndex) ? fragments[overlayIndex] : nil
+                            },
+                            effects: group.effects
+                        )
+                    } else {
+                        ChatFragmentView(fragment: fragments[index])
+                    }
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct BttvComposedEmoteView: View {
+    let base: ChatFragment
+    let overlays: [ChatFragment]
+    let effects: Set<BttvModifierEffect>
+
+    var body: some View {
+        if effects.contains(.party) || effects.contains(.shake) {
+            TimelineView(.animation(minimumInterval: 1.0 / 20.0)) { context in
+                styledStack(at: context.date)
+            }
+        } else {
+            styledStack(at: nil)
+        }
+    }
+
+    private func styledStack(at date: Date?) -> some View {
+        let rotated = effects.contains(.rotateLeft) || effects.contains(.rotateRight)
+        let wide = effects.contains(.wide) && !rotated
+        let flipX = effects.contains(.flipX)
+        let flipY = effects.contains(.flipY)
+        let noSpace = effects.contains(.noSpace)
+        let cursed = effects.contains(.cursed)
+        let party = effects.contains(.party)
+        let xScale: CGFloat = (wide ? 4 : 1) * (flipX ? -1 : 1)
+        let yScale: CGFloat = flipY ? -1 : 1
+        let rotation = rotationDegrees
+        let shake = shakeOffset(at: date)
+        let width: CGFloat = wide ? 112 : 28
+        let layoutWidth = max(1, width - (noSpace ? 4 : 0))
+
+        return ZStack {
+            ChatFragmentView(fragment: base)
+            ForEach(Array(overlays.enumerated()), id: \.offset) { _, overlay in
+                ChatFragmentView(fragment: overlay)
+            }
+        }
+        .scaleEffect(x: xScale, y: yScale)
+        .rotationEffect(.degrees(rotation))
+        .grayscale(cursed ? 1 : 0)
+        .brightness(cursed ? -0.3 : 0)
+        .contrast(cursed ? 2.5 : 1)
+        .saturation(party ? 2.5 : 1)
+        .hueRotation(.degrees(partyHue(at: date)))
+        .offset(
+            x: shake.width - (noSpace ? 4 : 0),
+            y: shake.height
+        )
+        .frame(width: layoutWidth, height: 28)
+        .accessibilityElement(children: .combine)
+    }
+
+    private var rotationDegrees: Double {
+        var degrees: Double = 0
+        if effects.contains(.rotateLeft) {
+            degrees -= 90
+        }
+        if effects.contains(.rotateRight) {
+            degrees += 90
+        }
+        return degrees
+    }
+
+    private func partyHue(at date: Date?) -> Double {
+        guard effects.contains(.party), let date else {
+            return 0
+        }
+        let cycle = date.timeIntervalSinceReferenceDate
+            .truncatingRemainder(dividingBy: 1.5)
+        return (cycle / 1.5) * 360
+    }
+
+    private func shakeOffset(at date: Date?) -> CGSize {
+        guard effects.contains(.shake), let date else {
+            return .zero
+        }
+        let frames: [CGSize] = [
+            CGSize(width: 0, height: 1),
+            CGSize(width: 2, height: 0),
+            CGSize(width: 1, height: -2),
+            CGSize(width: -2, height: 1),
+            CGSize(width: 0, height: -1),
+            CGSize(width: 2, height: 2),
+            CGSize(width: -1, height: -1),
+            CGSize(width: -2, height: 2),
+            CGSize(width: 2, height: 1),
+            CGSize(width: -1, height: -2),
+        ]
+        let step = Int((date.timeIntervalSinceReferenceDate / 0.05).rounded(.down))
+        return frames[((step % frames.count) + frames.count) % frames.count]
     }
 }
 
