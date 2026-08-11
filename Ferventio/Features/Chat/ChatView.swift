@@ -44,7 +44,7 @@ struct ChatView: View {
             Button {
                 Task { await connect() }
             } label: {
-                if store.connectionState == .connecting {
+                if store.connectionState == .connecting || store.connectionState == .reconnecting {
                     ProgressView()
                 } else {
                     Image(systemName: "arrow.right.circle.fill")
@@ -52,7 +52,11 @@ struct ChatView: View {
                 }
             }
             .buttonStyle(.borderless)
-            .disabled(store.connectionState == .connecting)
+            .disabled(
+                store.connectionState == .connecting
+                    || store.connectionState == .reconnecting
+                    || store.connectionState == .suspended
+            )
         }
         .padding(.horizontal)
         .padding(.vertical, 10)
@@ -146,7 +150,7 @@ struct ChatView: View {
         switch store.connectionState {
         case .disconnected:
             "chat.empty.disconnected.title"
-        case .connecting, .reconnecting:
+        case .connecting, .reconnecting, .suspended:
             "chat.empty.connecting.title"
         case .connected:
             "chat.empty.connected.title"
@@ -159,7 +163,7 @@ struct ChatView: View {
         switch store.connectionState {
         case .disconnected:
             "chat.empty.disconnected.message"
-        case .connecting, .reconnecting:
+        case .connecting, .reconnecting, .suspended:
             "chat.empty.connecting.message"
         case .connected:
             "chat.empty.connected.message"
@@ -174,6 +178,8 @@ struct ChatView: View {
             "wifi.exclamationmark"
         case .connecting, .reconnecting:
             "antenna.radiowaves.left.and.right"
+        case .suspended:
+            "pause.circle"
         case .disconnected, .connected:
             "bubble.left.and.bubble.right"
         }

@@ -102,6 +102,20 @@ final class AppEnvironment {
         }
     }
 
+    func applicationDidEnterBackground() async {
+        guard state == .signedIn else {
+            return
+        }
+        await chatStore.suspend()
+    }
+
+    func applicationDidBecomeActive() async {
+        guard state == .signedIn else {
+            return
+        }
+        await chatStore.resumeIfNeeded()
+    }
+
     private func apply(_ grant: AuthenticationGrant) {
         authenticationGrant = grant
         session = grant.accessLease.session

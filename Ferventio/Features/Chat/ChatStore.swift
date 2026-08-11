@@ -32,6 +32,7 @@ final class ChatStore {
         case connecting
         case connected
         case reconnecting
+        case suspended
         case failed
     }
 
@@ -121,6 +122,45 @@ final class ChatStore {
     func failChannelResolution() {
         connectionState = .failed
         showsConnectionError = true
+    }
+
+    func suspend() async {
+        guard channel != nil, activeLease != nil else {
+            return
+        }
+        generation &+= 1
+        receiveTask?.cancel()
+        receiveTask = nil
+        await client.disconnect()
+        connectionState = .suspended
+    }
+
+    func resumeIfNeeded() async {
+        guard connectionState == .suspended,
+              let channel,
+              let lease = activeLease else {
+            return
+        }
+
+        generation &+= 1
+        let currentGeneration = generation
+        connectionState = .connecting
+        showsConnectionError = false
+
+        do {
+            _ = try await client.connect(channel: channel, lease: lease)
+            guard generation == currentGeneration else {
+                return
+            }
+            connectionState = .connected
+            startReceiving(generation: currentGeneration)
+        } catch {
+            guard generation == currentGeneration else {
+                return
+            }
+            connectionState = .failed
+            showsConnectionError = true
+        }
     }
 
     func disconnect() async {

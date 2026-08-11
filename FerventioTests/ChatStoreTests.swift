@@ -38,6 +38,41 @@ struct ChatStoreTests {
     }
 
     @Test
+    func suspendAndResumePreserveMessagesDraftAndReplyTarget() async {
+        let eventSub = StubEventSubChatClient()
+        let sender = StubChatMessageSender(
+            result: ChatSendResult(messageID: "sent", isSent: true, dropReason: nil)
+        )
+        let store = ChatStore(client: eventSub, sender: sender)
+
+        await store.connect(
+            channel: makeChannel(),
+            lease: makeLease(),
+            currentUser: makeCurrentUser()
+        )
+        let parent = makeMessage(1, id: "parent-1", text: "Parent")
+        store.apply(.message(parent))
+        store.beginReply(to: parent)
+        store.composerText = "Draft"
+
+        await store.suspend()
+
+        #expect(store.connectionState == .suspended)
+        #expect(store.messages == [parent])
+        #expect(store.composerText == "Draft")
+        #expect(store.replyTarget?.id == "parent-1")
+
+        await store.resumeIfNeeded()
+
+        #expect(store.connectionState == .connected)
+        #expect(await eventSub.recordedConnectCount() == 2)
+        #expect(store.messages == [parent])
+        #expect(store.composerText == "Draft")
+        #expect(store.replyTarget?.id == "parent-1")
+        await store.disconnect()
+    }
+
+    @Test
     func sentOptimisticMessageIsReconciledWithEventSubMessage() async {
         let eventSub = StubEventSubChatClient()
         let sender = StubChatMessageSender(
@@ -175,8 +210,11 @@ struct ChatStoreTests {
 }
 
 private actor StubEventSubChatClient: EventSubChatStreaming {
+    private var connectCount = 0
+
     func connect(channel: ChatChannel, lease: TwitchAccessLease) async throws -> EventSubSubscription {
-        EventSubSubscription(
+        connectCount += 1
+        return EventSubSubscription(
             id: "subscription",
             status: "enabled",
             type: "channel.chat.message",
@@ -192,6 +230,10 @@ private actor StubEventSubChatClient: EventSubChatStreaming {
     }
 
     func disconnect() async {}
+
+    func recordedConnectCount() -> Int {
+        connectCount
+    }
 }
 
 private actor StubChatMessageSender: ChatMessageSending {
