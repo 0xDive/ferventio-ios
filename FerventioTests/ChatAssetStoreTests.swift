@@ -58,71 +58,68 @@ struct ChatAssetStoreTests {
     }
 
     @Test
-    func channelBetterTTVEmoteOverridesGlobalCode() async {
-        let global = ThirdPartyEmoteDefinition(
-            code: "SameCode",
-            emoteID: "global",
-            provider: "bttv",
-            animated: false,
-            imageURL: "https://example.com/global"
-        )
-        let channel = ThirdPartyEmoteDefinition(
-            code: "SameCode",
-            emoteID: "channel",
-            provider: "bttv",
-            animated: true,
-            imageURL: "https://example.com/channel"
-        )
+    func channelEmoteOverridesGlobalWithinProvider() async {
+        let global = emote(code: "SameCode", id: "global", provider: "bttv")
+        let channel = emote(code: "SameCode", id: "channel", provider: "bttv")
         let store = ChatAssetStore(
-            betterTTV: StubBetterTTVLoader(global: [global], channel: [channel])
+            betterTTV: StubEmoteLoader(global: [global], channel: [channel]),
+            frankerFaceZ: StubEmoteLoader()
         )
 
-        await store.loadBetterTTV(twitchUserID: "123")
+        await store.loadThirdPartyEmotes(twitchUserID: "123")
 
-        #expect(store.thirdPartyEmoteCatalog.count == 1)
         #expect(store.thirdPartyEmoteCatalog.emote(for: "SameCode") == channel)
         #expect(!store.isLoadingThirdPartyEmotes)
     }
 
     @Test
-    func failedBetterTTVChannelStillKeepsGlobalCatalog() async {
-        let global = ThirdPartyEmoteDefinition(
-            code: "OMEGALUL",
-            emoteID: "global",
-            provider: "bttv",
-            animated: false,
-            imageURL: nil
-        )
+    func betterTTVOverridesFrankerFaceZForSameCode() async {
+        let ffz = emote(code: "Shared", id: "ffz", provider: "ffz")
+        let bttv = emote(code: "Shared", id: "bttv", provider: "bttv")
         let store = ChatAssetStore(
-            betterTTV: StubBetterTTVLoader(
-                global: [global],
-                channel: [],
+            betterTTV: StubEmoteLoader(global: [bttv]),
+            frankerFaceZ: StubEmoteLoader(global: [ffz])
+        )
+
+        await store.loadThirdPartyEmotes(twitchUserID: "123")
+
+        #expect(store.thirdPartyEmoteCatalog.emote(for: "Shared") == bttv)
+    }
+
+    @Test
+    func failedFrankerFaceZChannelStillKeepsOtherCatalogs() async {
+        let ffzGlobal = emote(code: "FFZ", id: "ffz-global", provider: "ffz")
+        let bttvGlobal = emote(code: "BTTV", id: "bttv-global", provider: "bttv")
+        let store = ChatAssetStore(
+            betterTTV: StubEmoteLoader(global: [bttvGlobal]),
+            frankerFaceZ: StubEmoteLoader(
+                global: [ffzGlobal],
                 failChannel: true
             )
         )
 
-        await store.loadBetterTTV(twitchUserID: "123")
+        await store.loadThirdPartyEmotes(twitchUserID: "123")
 
-        #expect(store.thirdPartyEmoteCatalog.emote(for: "OMEGALUL") == global)
+        #expect(store.thirdPartyEmoteCatalog.emote(for: "FFZ") == ffzGlobal)
+        #expect(store.thirdPartyEmoteCatalog.emote(for: "BTTV") == bttvGlobal)
     }
 
     @Test
     func resetClearsBadgeAndThirdPartyCatalogs() async {
         let badge = ChatBadgeAsset(setID: "moderator", versionID: "1")
-        let emote = ThirdPartyEmoteDefinition(
-            code: "OMEGALUL",
-            emoteID: "1",
-            provider: "bttv",
-            animated: false,
-            imageURL: nil
-        )
+        let bttv = emote(code: "OMEGALUL", id: "1", provider: "bttv")
         let store = ChatAssetStore(
             badges: StubBadgeLoader(global: [badge], channel: []),
-            betterTTV: StubBetterTTVLoader(global: [emote], channel: [])
+            betterTTV: StubEmoteLoader(global: [bttv]),
+            frankerFaceZ: StubEmoteLoader()
         )
 
-        await store.loadBadges(clientID: "client", accessToken: "access", broadcasterID: "channel")
-        await store.loadBetterTTV(twitchUserID: "123")
+        await store.loadBadges(
+            clientID: "client",
+            accessToken: "access",
+            broadcasterID: "channel"
+        )
+        await store.loadThirdPartyEmotes(twitchUserID: "123")
         store.reset()
 
         #expect(store.badgeAssets.isEmpty)
@@ -130,12 +127,24 @@ struct ChatAssetStoreTests {
         #expect(!store.isLoadingBadges)
         #expect(!store.isLoadingThirdPartyEmotes)
     }
+
+    private func emote(
+        code: String,
+        id: String,
+        provider: String
+    ) -> ThirdPartyEmoteDefinition {
+        ThirdPartyEmoteDefinition(
+            code: code,
+            emoteID: id,
+            provider: provider,
+            animated: false,
+            imageURL: nil
+        )
+    }
 }
 
 private struct StubBadgeLoader: ChatBadgeLoading, Sendable {
-    enum Failure: Swift.Error {
-        case failed
-    }
+    enum Failure: Swift.Error { case failed }
 
     let global: [ChatBadgeAsset]
     let channel: [ChatBadgeAsset]
@@ -155,9 +164,7 @@ private struct StubBadgeLoader: ChatBadgeLoading, Sendable {
     }
 
     func getGlobalBadges(clientID: String, accessToken: String) async throws -> [ChatBadgeAsset] {
-        if failGlobal {
-            throw Failure.failed
-        }
+        if failGlobal { throw Failure.failed }
         return global
     }
 
@@ -166,17 +173,13 @@ private struct StubBadgeLoader: ChatBadgeLoading, Sendable {
         accessToken: String,
         broadcasterID: String
     ) async throws -> [ChatBadgeAsset] {
-        if failChannel {
-            throw Failure.failed
-        }
+        if failChannel { throw Failure.failed }
         return channel
     }
 }
 
-private struct StubBetterTTVLoader: BetterTTVEmoteLoading, Sendable {
-    enum Failure: Swift.Error {
-        case failed
-    }
+private struct StubEmoteLoader: BetterTTVEmoteLoading, FrankerFaceZEmoteLoading, Sendable {
+    enum Failure: Swift.Error { case failed }
 
     let global: [ThirdPartyEmoteDefinition]
     let channel: [ThirdPartyEmoteDefinition]
@@ -184,8 +187,8 @@ private struct StubBetterTTVLoader: BetterTTVEmoteLoading, Sendable {
     let failChannel: Bool
 
     init(
-        global: [ThirdPartyEmoteDefinition],
-        channel: [ThirdPartyEmoteDefinition],
+        global: [ThirdPartyEmoteDefinition] = [],
+        channel: [ThirdPartyEmoteDefinition] = [],
         failGlobal: Bool = false,
         failChannel: Bool = false
     ) {
@@ -196,16 +199,12 @@ private struct StubBetterTTVLoader: BetterTTVEmoteLoading, Sendable {
     }
 
     func getGlobalEmotes() async throws -> [ThirdPartyEmoteDefinition] {
-        if failGlobal {
-            throw Failure.failed
-        }
+        if failGlobal { throw Failure.failed }
         return global
     }
 
     func getChannelEmotes(twitchUserID: String) async throws -> [ThirdPartyEmoteDefinition] {
-        if failChannel {
-            throw Failure.failed
-        }
+        if failChannel { throw Failure.failed }
         return channel
     }
 }

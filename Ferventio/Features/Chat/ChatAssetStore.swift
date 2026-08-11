@@ -20,6 +20,13 @@ protocol BetterTTVEmoteLoading: Sendable {
 
 extension BetterTTVAPIClient: BetterTTVEmoteLoading {}
 
+protocol FrankerFaceZEmoteLoading: Sendable {
+    func getGlobalEmotes() async throws -> [ThirdPartyEmoteDefinition]
+    func getChannelEmotes(twitchUserID: String) async throws -> [ThirdPartyEmoteDefinition]
+}
+
+extension FrankerFaceZAPIClient: FrankerFaceZEmoteLoading {}
+
 @MainActor
 @Observable
 final class ChatAssetStore {
@@ -30,15 +37,18 @@ final class ChatAssetStore {
 
     @ObservationIgnored private let badges: any ChatBadgeLoading
     @ObservationIgnored private let betterTTV: any BetterTTVEmoteLoading
+    @ObservationIgnored private let frankerFaceZ: any FrankerFaceZEmoteLoading
     @ObservationIgnored private var badgeLoadGeneration = 0
     @ObservationIgnored private var emoteLoadGeneration = 0
 
     init(
         badges: (any ChatBadgeLoading)? = nil,
-        betterTTV: (any BetterTTVEmoteLoading)? = nil
+        betterTTV: (any BetterTTVEmoteLoading)? = nil,
+        frankerFaceZ: (any FrankerFaceZEmoteLoading)? = nil
     ) {
         self.badges = badges ?? TwitchChatAssetsAPIClient()
         self.betterTTV = betterTTV ?? BetterTTVAPIClient()
+        self.frankerFaceZ = frankerFaceZ ?? FrankerFaceZAPIClient()
     }
 
     func loadBadges(
@@ -76,7 +86,7 @@ final class ChatAssetStore {
         badgeAssets = merged
     }
 
-    func loadBetterTTV(twitchUserID: String) async {
+    func loadThirdPartyEmotes(twitchUserID: String) async {
         emoteLoadGeneration &+= 1
         let generation = emoteLoadGeneration
         isLoadingThirdPartyEmotes = true
@@ -86,14 +96,22 @@ final class ChatAssetStore {
             }
         }
 
-        async let globalRequest = optionalGlobalBetterTTVEmotes()
-        async let channelRequest = optionalChannelBetterTTVEmotes(twitchUserID: twitchUserID)
-        let (global, channel) = await (globalRequest, channelRequest)
+        async let betterTTVRequest = loadBetterTTVCatalog(twitchUserID: twitchUserID)
+        async let frankerFaceZRequest = loadFrankerFaceZCatalog(twitchUserID: twitchUserID)
+        let (betterTTVEmotes, frankerFaceZEmotes) = await (
+            betterTTVRequest,
+            frankerFaceZRequest
+        )
         guard emoteLoadGeneration == generation else {
             return
         }
 
-        thirdPartyEmoteCatalog = .merging(global: global, channel: channel)
+        // Keep Android provider precedence stable: BetterTTV > FFZ > 7TV.
+        // The catalog keeps the last definition for a code, so lower-priority
+        // providers must be appended first. 7TV is added in the next provider step.
+        thirdPartyEmoteCatalog = ThirdPartyEmoteCatalog(
+            emotes: frankerFaceZEmotes + betterTTVEmotes
+        )
     }
 
     func reset() {
@@ -103,6 +121,38 @@ final class ChatAssetStore {
         thirdPartyEmoteCatalog = ThirdPartyEmoteCatalog(emotes: [])
         isLoadingBadges = false
         isLoadingThirdPartyEmotes = false
+    }
+
+    private func loadBetterTTVCatalog(
+        twitchUserID: String
+    ) async -> [ThirdPartyEmoteDefinition] {
+        async let globalRequest = optionalGlobalBetterTTVEmotes()
+        async let channelRequest = optionalChannelBetterTTVEmotes(twitchUserID: twitchUserID)
+        let (global, channel) = await (globalRequest, channelRequest)
+        return mergeByCode(global: global, channel: channel)
+    }
+
+    private func loadFrankerFaceZCatalog(
+        twitchUserID: String
+    ) async -> [ThirdPartyEmoteDefinition] {
+        async let globalRequest = optionalGlobalFrankerFaceZEmotes()
+        async let channelRequest = optionalChannelFrankerFaceZEmotes(twitchUserID: twitchUserID)
+        let (global, channel) = await (globalRequest, channelRequest)
+        return mergeByCode(global: global, channel: channel)
+    }
+
+    private func mergeByCode(
+        global: [ThirdPartyEmoteDefinition],
+        channel: [ThirdPartyEmoteDefinition]
+    ) -> [ThirdPartyEmoteDefinition] {
+        var byCode: [String: ThirdPartyEmoteDefinition] = [:]
+        for emote in global where !emote.code.isEmpty {
+            byCode[emote.code] = emote
+        }
+        for emote in channel where !emote.code.isEmpty {
+            byCode[emote.code] = emote
+        }
+        return Array(byCode.values)
     }
 
     private func optionalGlobalBadges(
@@ -135,5 +185,15 @@ final class ChatAssetStore {
         twitchUserID: String
     ) async -> [ThirdPartyEmoteDefinition] {
         (try? await betterTTV.getChannelEmotes(twitchUserID: twitchUserID)) ?? []
+    }
+
+    private func optionalGlobalFrankerFaceZEmotes() async -> [ThirdPartyEmoteDefinition] {
+        (try? await frankerFaceZ.getGlobalEmotes()) ?? []
+    }
+
+    private func optionalChannelFrankerFaceZEmotes(
+        twitchUserID: String
+    ) async -> [ThirdPartyEmoteDefinition] {
+        (try? await frankerFaceZ.getChannelEmotes(twitchUserID: twitchUserID)) ?? []
     }
 }

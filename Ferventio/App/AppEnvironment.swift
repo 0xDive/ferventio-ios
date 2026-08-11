@@ -111,8 +111,10 @@ final class AppEnvironment {
                 accessToken: grant.accessLease.accessToken,
                 broadcasterID: channel.id
             )
-            async let betterTTV: Void = chatAssetStore.loadBetterTTV(twitchUserID: channel.id)
-            _ = await (badges, betterTTV)
+            async let thirdPartyEmotes: Void = chatAssetStore.loadThirdPartyEmotes(
+                twitchUserID: channel.id
+            )
+            _ = await (badges, thirdPartyEmotes)
 
             guard chatStore.channel?.id == channel.id else {
                 return
