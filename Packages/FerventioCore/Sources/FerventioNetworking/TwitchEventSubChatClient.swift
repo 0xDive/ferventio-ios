@@ -13,6 +13,7 @@ public actor TwitchEventSubChatClient {
         case subscriptionSessionMismatch
         case missingReconnectURL
         case authorizationRevoked
+        case reconnectExhausted
     }
 
     private static let maximumRememberedMessageIDs = 2_048
@@ -21,6 +22,8 @@ public actor TwitchEventSubChatClient {
     private let subscriptions: TwitchEventSubAPIClient
     private var seenMessageIDs = Set<String>()
     private var messageIDOrder: [String] = []
+    private var activeChannel: ChatChannel?
+    private var activeLease: TwitchAccessLease?
 
     public init(
         webSocket: EventSubWebSocketConnection = EventSubWebSocketConnection(),
@@ -35,37 +38,45 @@ public actor TwitchEventSubChatClient {
         channel: ChatChannel,
         lease: TwitchAccessLease
     ) async throws -> EventSubSubscription {
-        await webSocket.close()
         seenMessageIDs.removeAll(keepingCapacity: true)
         messageIDOrder.removeAll(keepingCapacity: true)
 
-        let welcome = try await webSocket.connect()
-        guard let sessionID = welcome.sessionID, !sessionID.isEmpty else {
-            await webSocket.close()
-            throw Error.invalidWelcome
-        }
-
         do {
-            let subscription = try await subscriptions.createChatMessageSubscription(
-                clientID: lease.session.clientID,
-                accessToken: lease.accessToken,
-                sessionID: sessionID,
-                broadcasterID: channel.id,
-                userID: lease.session.userID
-            )
-            if let subscriptionSessionID = subscription.sessionID,
-               subscriptionSessionID != sessionID {
-                await webSocket.close()
-                throw Error.subscriptionSessionMismatch
-            }
-            return subscription
+            let established = try await establishFreshConnection(channel: channel, lease: lease)
+            activeChannel = channel
+            activeLease = lease
+            return established.subscription
         } catch {
-            await webSocket.close()
+            activeChannel = nil
+            activeLease = nil
             throw error
         }
     }
 
     public func nextEvent() async throws -> Event {
+        do {
+            return try await nextEventWithoutTransportRecovery()
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let error as Error where error == .authorizationRevoked {
+            throw error
+        } catch {
+            if isNonRetryable(error) {
+                throw error
+            }
+            return try await reconnectAfterTransportFailure()
+        }
+    }
+
+    public func disconnect() async {
+        await webSocket.close()
+        activeChannel = nil
+        activeLease = nil
+        seenMessageIDs.removeAll(keepingCapacity: false)
+        messageIDOrder.removeAll(keepingCapacity: false)
+    }
+
+    private func nextEventWithoutTransportRecovery() async throws -> Event {
         while true {
             let envelope = try await webSocket.receive()
             if shouldIgnoreDuplicate(envelope) {
@@ -106,10 +117,74 @@ public actor TwitchEventSubChatClient {
         }
     }
 
-    public func disconnect() async {
+    private func reconnectAfterTransportFailure() async throws -> Event {
+        guard let channel = activeChannel, let lease = activeLease else {
+            throw Error.reconnectExhausted
+        }
+
+        for attempt in 0..<ReconnectBackoff.maximumAttempts {
+            try Task.checkCancellation()
+            let delayMilliseconds = ReconnectBackoff.delayMilliseconds(forAttempt: attempt)
+            try await Task.sleep(for: .milliseconds(Int64(delayMilliseconds)))
+
+            do {
+                let established = try await establishFreshConnection(channel: channel, lease: lease)
+                return .reconnected(sessionID: established.sessionID)
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                if isNonRetryable(error) {
+                    throw error
+                }
+            }
+        }
+
         await webSocket.close()
-        seenMessageIDs.removeAll(keepingCapacity: false)
-        messageIDOrder.removeAll(keepingCapacity: false)
+        throw Error.reconnectExhausted
+    }
+
+    private func establishFreshConnection(
+        channel: ChatChannel,
+        lease: TwitchAccessLease
+    ) async throws -> (subscription: EventSubSubscription, sessionID: String) {
+        await webSocket.close()
+        let welcome = try await webSocket.connect()
+        guard let sessionID = welcome.sessionID, !sessionID.isEmpty else {
+            await webSocket.close()
+            throw Error.invalidWelcome
+        }
+
+        do {
+            let subscription = try await subscriptions.createChatMessageSubscription(
+                clientID: lease.session.clientID,
+                accessToken: lease.accessToken,
+                sessionID: sessionID,
+                broadcasterID: channel.id,
+                userID: lease.session.userID
+            )
+            if let subscriptionSessionID = subscription.sessionID,
+               subscriptionSessionID != sessionID {
+                await webSocket.close()
+                throw Error.subscriptionSessionMismatch
+            }
+            return (subscription, sessionID)
+        } catch {
+            await webSocket.close()
+            throw error
+        }
+    }
+
+    private func isNonRetryable(_ error: Swift.Error) -> Bool {
+        if let eventSubError = error as? Error,
+           eventSubError == .authorizationRevoked {
+            return true
+        }
+        if let apiError = error as? TwitchEventSubAPIClient.Error,
+           case let .httpStatus(status, _) = apiError,
+           status == 401 || status == 403 {
+            return true
+        }
+        return false
     }
 
     private func shouldIgnoreDuplicate(_ envelope: EventSubEnvelope) -> Bool {
