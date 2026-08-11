@@ -24,20 +24,21 @@ struct FrankerFaceZAPIClientTests {
 
     @Test
     func globalParserUsesOnlyDefaultSetsAndSkipsModifiers() throws {
-        let data = Data(
-            #"{
-              "default_sets":[3],
-              "sets":{
-                "3":{"emoticons":[
-                  {"id":1,"name":"Global","urls":{"1":"//cdn.frankerfacez.com/1/1","2":"https://cdn.frankerfacez.com/1/2"},"animated":null,"modifier":false,"modifier_flags":0},
-                  {"id":2,"name":"ffzX","urls":{"1":"https://cdn.frankerfacez.com/2/1"},"animated":null,"modifier":true,"modifier_flags":3}
-                ]},
-                "99":{"emoticons":[
-                  {"id":99,"name":"UserSpecific","urls":{"1":"https://cdn.frankerfacez.com/99/1"},"animated":null,"modifier":false,"modifier_flags":0}
-                ]}
-              }
-            }"#.utf8
-        )
+        let json = """
+        {
+          "default_sets": [3],
+          "sets": {
+            "3": {"emoticons": [
+              {"id": 1, "name": "Global", "urls": {"1": "//cdn.frankerfacez.com/1/1", "2": "https://cdn.frankerfacez.com/1/2"}, "animated": null, "modifier": false, "modifier_flags": 0},
+              {"id": 2, "name": "ffzX", "urls": {"1": "https://cdn.frankerfacez.com/2/1"}, "animated": null, "modifier": true, "modifier_flags": 3}
+            ]},
+            "99": {"emoticons": [
+              {"id": 99, "name": "UserSpecific", "urls": {"1": "https://cdn.frankerfacez.com/99/1"}, "animated": null, "modifier": false, "modifier_flags": 0}
+            ]}
+          }
+        }
+        """
+        let data = Data(json.utf8)
 
         let emotes = try FrankerFaceZAPIClient.parseGlobalResponse(data)
 
@@ -49,19 +50,20 @@ struct FrankerFaceZAPIClientTests {
 
     @Test
     func channelParserUsesPrimaryRoomSetAndPrefersAnimatedAsset() throws {
-        let data = Data(
-            #"{
-              "room":{"set":42},
-              "sets":{
-                "42":{"emoticons":[
-                  {"id":7,"name":"Dance","urls":{"2":"https://cdn.frankerfacez.com/7/2"},"animated":{"2":"https://cdn.frankerfacez.com/7/2.webp"},"modifier":false,"modifier_flags":0}
-                ]},
-                "43":{"emoticons":[
-                  {"id":8,"name":"WrongSet","urls":{"2":"https://cdn.frankerfacez.com/8/2"},"animated":null,"modifier":false,"modifier_flags":0}
-                ]}
-              }
-            }"#.utf8
-        )
+        let json = """
+        {
+          "room": {"set": 42},
+          "sets": {
+            "42": {"emoticons": [
+              {"id": 7, "name": "Dance", "urls": {"2": "https://cdn.frankerfacez.com/7/2"}, "animated": {"2": "https://cdn.frankerfacez.com/7/2.webp"}, "modifier": false, "modifier_flags": 0}
+            ]},
+            "43": {"emoticons": [
+              {"id": 8, "name": "WrongSet", "urls": {"2": "https://cdn.frankerfacez.com/8/2"}, "animated": null, "modifier": false, "modifier_flags": 0}
+            ]}
+          }
+        }
+        """
+        let data = Data(json.utf8)
 
         let emotes = try FrankerFaceZAPIClient.parseChannelResponse(data)
 
