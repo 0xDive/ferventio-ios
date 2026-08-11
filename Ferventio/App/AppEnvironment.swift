@@ -92,7 +92,11 @@ final class AppEnvironment {
 
         do {
             let channel = try await twitchBootstrap.resolveChannel(login: login, for: grant)
-            await chatStore.connect(channel: channel, lease: grant.accessLease)
+            await chatStore.connect(
+                channel: channel,
+                lease: grant.accessLease,
+                currentUser: currentUser
+            )
         } catch {
             chatStore.failChannelResolution()
         }

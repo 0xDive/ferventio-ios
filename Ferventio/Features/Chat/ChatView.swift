@@ -10,6 +10,8 @@ struct ChatView: View {
             channelBar
             Divider()
             messageFeed
+            Divider()
+            composerBar
         }
         .alert(
             String(localized: "chat.error.title"),
@@ -18,6 +20,14 @@ struct ChatView: View {
             Button("common.ok", role: .cancel) {}
         } message: {
             Text("chat.error.message")
+        }
+        .alert(
+            String(localized: "chat.send.error.title"),
+            isPresented: $store.showsSendError
+        ) {
+            Button("common.ok", role: .cancel) {}
+        } message: {
+            Text("chat.send.error.message")
         }
     }
 
@@ -77,6 +87,33 @@ struct ChatView: View {
         }
     }
 
+    private var composerBar: some View {
+        HStack(alignment: .bottom, spacing: 10) {
+            TextField("chat.composer.placeholder", text: $store.composerText, axis: .vertical)
+                .lineLimit(1...4)
+                .submitLabel(.send)
+                .disabled(store.connectionState != .connected)
+                .onSubmit {
+                    Task { await store.sendCurrentMessage() }
+                }
+
+            Button {
+                Task { await store.sendCurrentMessage() }
+            } label: {
+                if store.isSending {
+                    ProgressView()
+                } else {
+                    Image(systemName: "paperplane.fill")
+                        .accessibilityLabel(Text("chat.send"))
+                }
+            }
+            .buttonStyle(.borderless)
+            .disabled(!store.canSend)
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 10)
+    }
+
     private var emptyTitleKey: String.LocalizationValue {
         switch store.connectionState {
         case .disconnected:
@@ -119,23 +156,40 @@ private struct ChatMessageRow: View {
     let message: ChatMessage
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            if let reply = message.reply,
-               let parentName = reply.parentUserName ?? reply.parentUserLogin {
-                Text("↪ \(parentName)")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            VStack(alignment: .leading, spacing: 3) {
+                if let reply = message.reply,
+                   let parentName = reply.parentUserName ?? reply.parentUserLogin {
+                    Text("↪ \(parentName)")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(message.author.displayName)
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(1)
+
+                    Text(message.text)
+                        .font(.body)
+                        .textSelection(.enabled)
+                }
             }
 
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(message.author.displayName)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
+            Spacer(minLength: 4)
 
-                Text(message.text)
-                    .font(.body)
-                    .textSelection(.enabled)
+            switch message.outgoingState {
+            case .sending:
+                ProgressView()
+                    .controlSize(.mini)
+                    .accessibilityLabel(Text("chat.message.sending"))
+            case .failed:
+                Image(systemName: "exclamationmark.circle.fill")
+                    .foregroundStyle(.red)
+                    .accessibilityLabel(Text("chat.message.failed"))
+            case .none, .sent:
+                EmptyView()
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

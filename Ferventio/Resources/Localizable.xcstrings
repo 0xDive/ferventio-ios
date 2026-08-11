@@ -55,6 +55,12 @@
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "Логин канала" } }
       }
     },
+    "chat.composer.placeholder" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Message" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Сообщение" } }
+      }
+    },
     "chat.connect" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Connect" } },
@@ -119,6 +125,36 @@
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Chat connection failed" } },
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "Ошибка подключения к чату" } }
+      }
+    },
+    "chat.message.failed" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Message failed to send" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Не удалось отправить сообщение" } }
+      }
+    },
+    "chat.message.sending" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Sending message" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Отправка сообщения" } }
+      }
+    },
+    "chat.send" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Send" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Отправить" } }
+      }
+    },
+    "chat.send.error.message" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Twitch did not accept this message. You can edit it and try again." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Twitch не принял это сообщение. Его можно изменить и отправить снова." } }
+      }
+    },
+    "chat.send.error.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Message not sent" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Сообщение не отправлено" } }
       }
     },
     "common.ok" : {
