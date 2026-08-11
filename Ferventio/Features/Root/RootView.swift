@@ -55,20 +55,41 @@ struct RootView: View {
     }
 
     private var signedInView: some View {
-        VStack(spacing: 16) {
-            profileImage
-            Text(environment.currentUser?.displayName ?? environment.session?.login ?? "")
-                .font(.title2.weight(.semibold))
-            if let login = environment.session?.login {
-                Text("@\(login)")
-                    .foregroundStyle(.secondary)
+        VStack(spacing: 0) {
+            accountHeader
+            Divider()
+            ChatView(store: environment.chatStore) {
+                await environment.connectChat()
             }
-            Button("auth.sign_out", role: .destructive) {
-                Task { await environment.signOut() }
-            }
-            .disabled(environment.isSigningOut)
         }
-        .padding()
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("auth.sign_out", role: .destructive) {
+                    Task { await environment.signOut() }
+                }
+                .disabled(environment.isSigningOut)
+            }
+        }
+    }
+
+    private var accountHeader: some View {
+        HStack(spacing: 10) {
+            profileImage
+            VStack(alignment: .leading, spacing: 1) {
+                Text(environment.currentUser?.displayName ?? environment.session?.login ?? "")
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                if let login = environment.session?.login {
+                    Text("@\(login)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 8)
     }
 
     @ViewBuilder
@@ -82,11 +103,11 @@ struct RootView: View {
             } placeholder: {
                 ProgressView()
             }
-            .frame(width: 72, height: 72)
+            .frame(width: 36, height: 36)
             .clipShape(Circle())
         } else {
             Image(systemName: "person.crop.circle.badge.checkmark")
-                .font(.system(size: 52))
+                .font(.system(size: 30))
                 .accessibilityHidden(true)
         }
     }

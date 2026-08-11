@@ -1,3 +1,4 @@
+import Foundation
 import FerventioDomain
 import Observation
 
@@ -10,6 +11,7 @@ final class AppEnvironment {
     var isAuthorizing = false
     var isSigningOut = false
     var showsAuthenticationError = false
+    let chatStore: ChatStore
 
     @ObservationIgnored private let authService: any Authenticating
     @ObservationIgnored private let twitchBootstrap: any TwitchBootstrapping
@@ -17,10 +19,12 @@ final class AppEnvironment {
 
     init(
         authService: (any Authenticating)? = nil,
-        twitchBootstrap: (any TwitchBootstrapping)? = nil
+        twitchBootstrap: (any TwitchBootstrapping)? = nil,
+        chatStore: ChatStore? = nil
     ) {
         self.authService = authService ?? AuthService.live()
         self.twitchBootstrap = twitchBootstrap ?? TwitchBootstrapService()
+        self.chatStore = chatStore ?? ChatStore()
     }
 
     func start() async {
@@ -65,6 +69,7 @@ final class AppEnvironment {
         isSigningOut = true
         defer { isSigningOut = false }
 
+        await chatStore.disconnect()
         do {
             try await authService.signOut()
             clearSession()
@@ -74,9 +79,29 @@ final class AppEnvironment {
         }
     }
 
+    func connectChat() async {
+        guard let grant = authenticationGrant else {
+            chatStore.failChannelResolution()
+            return
+        }
+        let login = chatStore.channelInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !login.isEmpty else {
+            chatStore.failChannelResolution()
+            return
+        }
+
+        do {
+            let channel = try await twitchBootstrap.resolveChannel(login: login, for: grant)
+            await chatStore.connect(channel: channel, lease: grant.accessLease)
+        } catch {
+            chatStore.failChannelResolution()
+        }
+    }
+
     private func apply(_ grant: AuthenticationGrant) {
         authenticationGrant = grant
         session = grant.accessLease.session
+        chatStore.prepareDefaultChannel(login: grant.accessLease.session.login)
         state = .signedIn
     }
 

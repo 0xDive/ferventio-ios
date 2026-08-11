@@ -49,6 +49,78 @@
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "Подключиться к Twitch" } }
       }
     },
+    "chat.channel.placeholder" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Channel login" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Логин канала" } }
+      }
+    },
+    "chat.connect" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Connect" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Подключиться" } }
+      }
+    },
+    "chat.empty.connected.message" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "New messages will appear here." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Новые сообщения появятся здесь." } }
+      }
+    },
+    "chat.empty.connected.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Waiting for chat" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Ожидание сообщений" } }
+      }
+    },
+    "chat.empty.connecting.message" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Opening the Twitch EventSub connection." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Открываем соединение Twitch EventSub." } }
+      }
+    },
+    "chat.empty.connecting.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Connecting" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Подключение" } }
+      }
+    },
+    "chat.empty.disconnected.message" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Enter a Twitch channel login to start reading chat." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Введите логин Twitch-канала, чтобы начать читать чат." } }
+      }
+    },
+    "chat.empty.disconnected.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Choose a channel" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Выберите канал" } }
+      }
+    },
+    "chat.empty.failed.message" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Check the channel login and your connection, then try again." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Проверьте логин канала и подключение, затем попробуйте снова." } }
+      }
+    },
+    "chat.empty.failed.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Chat unavailable" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Чат недоступен" } }
+      }
+    },
+    "chat.error.message" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Ferventio could not connect to this Twitch chat. Check the channel and your network connection." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Ferventio не удалось подключиться к этому чату Twitch. Проверьте канал и сетевое подключение." } }
+      }
+    },
+    "chat.error.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Chat connection failed" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Ошибка подключения к чату" } }
+      }
+    },
     "common.ok" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "OK" } },
