@@ -27,6 +27,13 @@ protocol FrankerFaceZEmoteLoading: Sendable {
 
 extension FrankerFaceZAPIClient: FrankerFaceZEmoteLoading {}
 
+protocol SevenTVEmoteLoading: Sendable {
+    func getGlobalEmotes() async throws -> [ThirdPartyEmoteDefinition]
+    func getChannelEmotes(twitchUserID: String) async throws -> [ThirdPartyEmoteDefinition]
+}
+
+extension SevenTVAPIClient: SevenTVEmoteLoading {}
+
 @MainActor
 @Observable
 final class ChatAssetStore {
@@ -38,17 +45,20 @@ final class ChatAssetStore {
     @ObservationIgnored private let badges: any ChatBadgeLoading
     @ObservationIgnored private let betterTTV: any BetterTTVEmoteLoading
     @ObservationIgnored private let frankerFaceZ: any FrankerFaceZEmoteLoading
+    @ObservationIgnored private let sevenTV: any SevenTVEmoteLoading
     @ObservationIgnored private var badgeLoadGeneration = 0
     @ObservationIgnored private var emoteLoadGeneration = 0
 
     init(
         badges: (any ChatBadgeLoading)? = nil,
         betterTTV: (any BetterTTVEmoteLoading)? = nil,
-        frankerFaceZ: (any FrankerFaceZEmoteLoading)? = nil
+        frankerFaceZ: (any FrankerFaceZEmoteLoading)? = nil,
+        sevenTV: (any SevenTVEmoteLoading)? = nil
     ) {
         self.badges = badges ?? TwitchChatAssetsAPIClient()
         self.betterTTV = betterTTV ?? BetterTTVAPIClient()
         self.frankerFaceZ = frankerFaceZ ?? FrankerFaceZAPIClient()
+        self.sevenTV = sevenTV ?? SevenTVAPIClient()
     }
 
     func loadBadges(
@@ -98,19 +108,20 @@ final class ChatAssetStore {
 
         async let betterTTVRequest = loadBetterTTVCatalog(twitchUserID: twitchUserID)
         async let frankerFaceZRequest = loadFrankerFaceZCatalog(twitchUserID: twitchUserID)
-        let (betterTTVEmotes, frankerFaceZEmotes) = await (
+        async let sevenTVRequest = loadSevenTVCatalog(twitchUserID: twitchUserID)
+        let (betterTTVEmotes, frankerFaceZEmotes, sevenTVEmotes) = await (
             betterTTVRequest,
-            frankerFaceZRequest
+            frankerFaceZRequest,
+            sevenTVRequest
         )
         guard emoteLoadGeneration == generation else {
             return
         }
 
-        // Keep Android provider precedence stable: BetterTTV > FFZ > 7TV.
-        // The catalog keeps the last definition for a code, so lower-priority
-        // providers must be appended first. 7TV is added in the next provider step.
+        // Match Android provider precedence. Last definition wins in the
+        // catalog, so the order is intentionally 7TV < FFZ < BetterTTV.
         thirdPartyEmoteCatalog = ThirdPartyEmoteCatalog(
-            emotes: frankerFaceZEmotes + betterTTVEmotes
+            emotes: sevenTVEmotes + frankerFaceZEmotes + betterTTVEmotes
         )
     }
 
@@ -137,6 +148,15 @@ final class ChatAssetStore {
     ) async -> [ThirdPartyEmoteDefinition] {
         async let globalRequest = optionalGlobalFrankerFaceZEmotes()
         async let channelRequest = optionalChannelFrankerFaceZEmotes(twitchUserID: twitchUserID)
+        let (global, channel) = await (globalRequest, channelRequest)
+        return mergeByCode(global: global, channel: channel)
+    }
+
+    private func loadSevenTVCatalog(
+        twitchUserID: String
+    ) async -> [ThirdPartyEmoteDefinition] {
+        async let globalRequest = optionalGlobalSevenTVEmotes()
+        async let channelRequest = optionalChannelSevenTVEmotes(twitchUserID: twitchUserID)
         let (global, channel) = await (globalRequest, channelRequest)
         return mergeByCode(global: global, channel: channel)
     }
@@ -195,5 +215,15 @@ final class ChatAssetStore {
         twitchUserID: String
     ) async -> [ThirdPartyEmoteDefinition] {
         (try? await frankerFaceZ.getChannelEmotes(twitchUserID: twitchUserID)) ?? []
+    }
+
+    private func optionalGlobalSevenTVEmotes() async -> [ThirdPartyEmoteDefinition] {
+        (try? await sevenTV.getGlobalEmotes()) ?? []
+    }
+
+    private func optionalChannelSevenTVEmotes(
+        twitchUserID: String
+    ) async -> [ThirdPartyEmoteDefinition] {
+        (try? await sevenTV.getChannelEmotes(twitchUserID: twitchUserID)) ?? []
     }
 }

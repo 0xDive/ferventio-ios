@@ -41,11 +41,7 @@ struct ChatAssetStoreTests {
     func oneFailedBadgeCatalogStillKeepsSuccessfulCatalog() async {
         let moderator = ChatBadgeAsset(setID: "moderator", versionID: "1")
         let store = ChatAssetStore(
-            badges: StubBadgeLoader(
-                global: [moderator],
-                channel: [],
-                failChannel: true
-            )
+            badges: StubBadgeLoader(global: [moderator], channel: [], failChannel: true)
         )
 
         await store.loadBadges(
@@ -63,7 +59,8 @@ struct ChatAssetStoreTests {
         let channel = emote(code: "SameCode", id: "channel", provider: "bttv")
         let store = ChatAssetStore(
             betterTTV: StubEmoteLoader(global: [global], channel: [channel]),
-            frankerFaceZ: StubEmoteLoader()
+            frankerFaceZ: StubEmoteLoader(),
+            sevenTV: StubEmoteLoader()
         )
 
         await store.loadThirdPartyEmotes(twitchUserID: "123")
@@ -73,35 +70,40 @@ struct ChatAssetStoreTests {
     }
 
     @Test
-    func betterTTVOverridesFrankerFaceZForSameCode() async {
+    func providerPrecedenceIsBetterTTVThenFrankerFaceZThenSevenTV() async {
+        let seven = emote(code: "Shared", id: "seven", provider: "7tv")
         let ffz = emote(code: "Shared", id: "ffz", provider: "ffz")
         let bttv = emote(code: "Shared", id: "bttv", provider: "bttv")
+        let ffzOnly = emote(code: "LowerConflict", id: "ffz-only", provider: "ffz")
+        let sevenLower = emote(code: "LowerConflict", id: "seven-lower", provider: "7tv")
         let store = ChatAssetStore(
             betterTTV: StubEmoteLoader(global: [bttv]),
-            frankerFaceZ: StubEmoteLoader(global: [ffz])
+            frankerFaceZ: StubEmoteLoader(global: [ffz, ffzOnly]),
+            sevenTV: StubEmoteLoader(global: [seven, sevenLower])
         )
 
         await store.loadThirdPartyEmotes(twitchUserID: "123")
 
         #expect(store.thirdPartyEmoteCatalog.emote(for: "Shared") == bttv)
+        #expect(store.thirdPartyEmoteCatalog.emote(for: "LowerConflict") == ffzOnly)
     }
 
     @Test
-    func failedFrankerFaceZChannelStillKeepsOtherCatalogs() async {
+    func failedProviderEndpointStillKeepsOtherCatalogs() async {
         let ffzGlobal = emote(code: "FFZ", id: "ffz-global", provider: "ffz")
         let bttvGlobal = emote(code: "BTTV", id: "bttv-global", provider: "bttv")
+        let sevenChannel = emote(code: "Seven", id: "seven-channel", provider: "7tv")
         let store = ChatAssetStore(
             betterTTV: StubEmoteLoader(global: [bttvGlobal]),
-            frankerFaceZ: StubEmoteLoader(
-                global: [ffzGlobal],
-                failChannel: true
-            )
+            frankerFaceZ: StubEmoteLoader(global: [ffzGlobal], failChannel: true),
+            sevenTV: StubEmoteLoader(channel: [sevenChannel], failGlobal: true)
         )
 
         await store.loadThirdPartyEmotes(twitchUserID: "123")
 
         #expect(store.thirdPartyEmoteCatalog.emote(for: "FFZ") == ffzGlobal)
         #expect(store.thirdPartyEmoteCatalog.emote(for: "BTTV") == bttvGlobal)
+        #expect(store.thirdPartyEmoteCatalog.emote(for: "Seven") == sevenChannel)
     }
 
     @Test
@@ -111,14 +113,11 @@ struct ChatAssetStoreTests {
         let store = ChatAssetStore(
             badges: StubBadgeLoader(global: [badge], channel: []),
             betterTTV: StubEmoteLoader(global: [bttv]),
-            frankerFaceZ: StubEmoteLoader()
+            frankerFaceZ: StubEmoteLoader(),
+            sevenTV: StubEmoteLoader()
         )
 
-        await store.loadBadges(
-            clientID: "client",
-            accessToken: "access",
-            broadcasterID: "channel"
-        )
+        await store.loadBadges(clientID: "client", accessToken: "access", broadcasterID: "channel")
         await store.loadThirdPartyEmotes(twitchUserID: "123")
         store.reset()
 
@@ -178,7 +177,7 @@ private struct StubBadgeLoader: ChatBadgeLoading, Sendable {
     }
 }
 
-private struct StubEmoteLoader: BetterTTVEmoteLoading, FrankerFaceZEmoteLoading, Sendable {
+private struct StubEmoteLoader: BetterTTVEmoteLoading, FrankerFaceZEmoteLoading, SevenTVEmoteLoading, Sendable {
     enum Failure: Swift.Error { case failed }
 
     let global: [ThirdPartyEmoteDefinition]
