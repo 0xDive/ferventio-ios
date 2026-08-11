@@ -15,7 +15,7 @@ struct ChatHistoryIntegrationTests {
         )
 
         await store.connect(
-            channel: ChatChannel(id: "channel", login: "channel", displayName: "Channel"),
+            channel: makeChannel(),
             lease: makeLease(),
             currentUser: nil
         )
@@ -31,6 +31,76 @@ struct ChatHistoryIntegrationTests {
     }
 
     @Test
+    func remoteBootstrapRunsAfterConnectAndMergesSnapshot() async {
+        let remote = makeMessage(id: "remote-1", timestamp: 200)
+        let loader = StubRecentMessagesLoader(result: TwitchRecentMessagesResult(messages: [remote]))
+        let store = ChatStore(
+            client: IdleEventSubClient(),
+            recentMessagesLoader: loader
+        )
+
+        await store.connect(
+            channel: makeChannel(),
+            lease: makeLease(),
+            currentUser: nil
+        )
+
+        for _ in 0..<50 where !store.messages.contains(where: { $0.id == "remote-1" }) {
+            await Task.yield()
+        }
+
+        #expect(store.connectionState == .connected)
+        #expect(store.messages.map(\.id) == ["remote-1"])
+        #expect(await loader.recordedLimit() == ChatStore.remoteRecentMessagesLimit)
+        await store.disconnect()
+    }
+
+    @Test
+    func remoteMergePersistsOnlyNewCanonicalRows() async {
+        let history = StubChatHistory()
+        let store = ChatStore(
+            history: history,
+            recentMessagesLoader: NoopRecentMessagesLoader()
+        )
+        let catalog = ThirdPartyEmoteCatalog(emotes: [
+            ThirdPartyEmoteDefinition(
+                code: "OMEGALUL",
+                emoteID: "bttv-1",
+                provider: "bttv",
+                animated: false,
+                imageURL: "https://example.com/omegalul"
+            )
+        ])
+        store.setThirdPartyEmoteCatalog(catalog)
+
+        let canonical = ChatMessage(
+            id: "remote-1",
+            channelID: "channel",
+            channelLogin: "channel",
+            author: ChatAuthor(id: "viewer", login: "viewer", displayName: "Viewer"),
+            text: "OMEGALUL",
+            fragments: [.text("OMEGALUL")],
+            timestamp: "2026-08-11T10:00:00Z",
+            timestampMilliseconds: 200
+        )
+
+        await store.mergeRecentMessages([canonical])
+        await store.mergeRecentMessages([canonical])
+
+        #expect(store.messages.count == 1)
+        #expect(store.messages[0].fragments.first == .thirdPartyEmote(
+            text: "OMEGALUL",
+            emoteID: "bttv-1",
+            provider: "bttv",
+            animated: false,
+            imageURL: "https://example.com/omegalul",
+            zeroWidth: false
+        ))
+        let persisted = await history.recordedEnqueued()
+        #expect(persisted == [canonical])
+    }
+
+    @Test
     func backgroundAndDisconnectFlushPendingHistory() async {
         let history = StubChatHistory()
         let store = ChatStore(
@@ -39,7 +109,7 @@ struct ChatHistoryIntegrationTests {
         )
 
         await store.connect(
-            channel: ChatChannel(id: "channel", login: "channel", displayName: "Channel"),
+            channel: makeChannel(),
             lease: makeLease(),
             currentUser: nil
         )
@@ -53,6 +123,10 @@ struct ChatHistoryIntegrationTests {
         #expect(flushesAfterConnect >= 1)
         #expect(flushesAfterSuspend > flushesAfterConnect)
         #expect(flushesAfterDisconnect > flushesAfterSuspend)
+    }
+
+    private func makeChannel() -> ChatChannel {
+        ChatChannel(id: "channel", login: "channel", displayName: "Channel")
     }
 
     private func makeMessage(id: String, timestamp: Int64) -> ChatMessage {
@@ -131,6 +205,31 @@ private actor StubChatHistory: ChatHistoryPersisting {
 
     func recordedFlushCount() -> Int {
         flushCount
+    }
+
+    func recordedEnqueued() -> [ChatMessage] {
+        enqueued
+    }
+}
+
+private actor StubRecentMessagesLoader: RecentMessagesLoading {
+    private let result: TwitchRecentMessagesResult
+    private var limit: Int?
+
+    init(result: TwitchRecentMessagesResult) {
+        self.result = result
+    }
+
+    func load(
+        channel: ChatChannel,
+        limit: Int
+    ) async throws -> TwitchRecentMessagesResult {
+        self.limit = limit
+        return result
+    }
+
+    func recordedLimit() -> Int? {
+        limit
     }
 }
 

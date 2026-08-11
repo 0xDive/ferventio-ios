@@ -39,6 +39,7 @@ final class ChatStore {
     static let maximumMessages = 2_000
     static let maximumMessageCharacters = 500
     static let initialHistoryMessages = 500
+    static let remoteRecentMessagesLimit = 100
     static let maximumPersistedMessagesPerChannel = 5_000
     static let defaultHistoryRetentionMilliseconds: Int64 = 7 * 24 * 60 * 60 * 1_000
 
@@ -63,7 +64,9 @@ final class ChatStore {
     @ObservationIgnored private let client: any EventSubChatStreaming
     @ObservationIgnored private let sender: any ChatMessageSending
     @ObservationIgnored private let history: any ChatHistoryPersisting
+    @ObservationIgnored private let recentMessagesLoader: any RecentMessagesLoading
     @ObservationIgnored private var receiveTask: Task<Void, Never>?
+    @ObservationIgnored private var recentMessagesTask: Task<Void, Never>?
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var activeLease: TwitchAccessLease?
     @ObservationIgnored private var localAuthor: ChatAuthor?
@@ -72,11 +75,13 @@ final class ChatStore {
     init(
         client: (any EventSubChatStreaming)? = nil,
         sender: (any ChatMessageSending)? = nil,
-        history: (any ChatHistoryPersisting)? = nil
+        history: (any ChatHistoryPersisting)? = nil,
+        recentMessagesLoader: (any RecentMessagesLoading)? = nil
     ) {
         self.client = client ?? TwitchEventSubChatClient()
         self.sender = sender ?? TwitchChatAPIClient()
         self.history = history ?? NoopChatHistory()
+        self.recentMessagesLoader = recentMessagesLoader ?? RecentMessagesLoaderFactory.live()
     }
 
     func prepareDefaultChannel(login: String) {
@@ -94,6 +99,8 @@ final class ChatStore {
         let currentGeneration = generation
         receiveTask?.cancel()
         receiveTask = nil
+        recentMessagesTask?.cancel()
+        recentMessagesTask = nil
         await client.disconnect()
         await history.flush()
 
@@ -137,6 +144,10 @@ final class ChatStore {
             }
             connectionState = .connected
             startReceiving(generation: currentGeneration)
+            startRecentMessagesBootstrap(
+                channel: channel,
+                generation: currentGeneration
+            )
         } catch {
             guard generation == currentGeneration else {
                 return
@@ -163,6 +174,8 @@ final class ChatStore {
         generation &+= 1
         receiveTask?.cancel()
         receiveTask = nil
+        recentMessagesTask?.cancel()
+        recentMessagesTask = nil
         await client.disconnect()
         await history.flush()
         connectionState = .suspended
@@ -187,6 +200,10 @@ final class ChatStore {
             }
             connectionState = .connected
             startReceiving(generation: currentGeneration)
+            startRecentMessagesBootstrap(
+                channel: channel,
+                generation: currentGeneration
+            )
         } catch {
             guard generation == currentGeneration else {
                 return
@@ -200,6 +217,8 @@ final class ChatStore {
         generation &+= 1
         receiveTask?.cancel()
         receiveTask = nil
+        recentMessagesTask?.cancel()
+        recentMessagesTask = nil
         await client.disconnect()
         await history.flush()
         channel = nil
@@ -293,6 +312,32 @@ final class ChatStore {
         }
     }
 
+    func mergeRecentMessages(_ recent: [ChatMessage]) async {
+        guard !recent.isEmpty else {
+            return
+        }
+
+        let canonicalByID = Dictionary(
+            uniqueKeysWithValues: recent.map { ($0.id, $0) }
+        )
+        let enrichedRecent = recent.map(enrich)
+        let merged = RecentMessagesMerge.merge(
+            existing: messages,
+            recent: enrichedRecent,
+            limit: Self.maximumMessages
+        )
+        guard !merged.addedMessages.isEmpty else {
+            return
+        }
+
+        messages = merged.messages
+        for added in merged.addedMessages {
+            if let canonical = canonicalByID[added.id] {
+                await history.enqueue(canonical)
+            }
+        }
+    }
+
     private func startReceiving(generation currentGeneration: Int) {
         receiveTask = Task { [weak self] in
             guard let self else { return }
@@ -319,6 +364,34 @@ final class ChatStore {
                     self.showsConnectionError = true
                     return
                 }
+            }
+        }
+    }
+
+    private func startRecentMessagesBootstrap(
+        channel: ChatChannel,
+        generation currentGeneration: Int
+    ) {
+        recentMessagesTask?.cancel()
+        recentMessagesTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                let result = try await self.recentMessagesLoader.load(
+                    channel: channel,
+                    limit: Self.remoteRecentMessagesLimit
+                )
+                guard !Task.isCancelled,
+                      self.generation == currentGeneration,
+                      self.channel?.id == channel.id else {
+                    return
+                }
+                await self.mergeRecentMessages(result.messages)
+            } catch is CancellationError {
+                return
+            } catch {
+                // Recent snapshots are an optional bootstrap source. Failure
+                // must never affect EventSub connectivity or the local cache.
+                return
             }
         }
     }

@@ -26,7 +26,10 @@ final class AppEnvironment {
     ) {
         self.authService = authService ?? AuthService.live()
         self.twitchBootstrap = twitchBootstrap ?? TwitchBootstrapService()
-        self.chatStore = chatStore ?? ChatStore(history: ChatHistoryFactory.live())
+        self.chatStore = chatStore ?? ChatStore(
+            history: ChatHistoryFactory.live(),
+            recentMessagesLoader: RecentMessagesLoaderFactory.live()
+        )
         self.chatAssetStore = chatAssetStore ?? ChatAssetStore()
     }
 
