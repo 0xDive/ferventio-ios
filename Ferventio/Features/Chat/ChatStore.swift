@@ -63,6 +63,7 @@ final class ChatStore {
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var activeLease: TwitchAccessLease?
     @ObservationIgnored private var localAuthor: ChatAuthor?
+    @ObservationIgnored private var thirdPartyEmoteCatalog = ThirdPartyEmoteCatalog(emotes: [])
 
     init(
         client: (any EventSubChatStreaming)? = nil,
@@ -97,6 +98,7 @@ final class ChatStore {
             displayName: currentUser?.displayName ?? lease.session.login,
             profileImageURL: currentUser?.profileImageURL
         )
+        thirdPartyEmoteCatalog = ThirdPartyEmoteCatalog(emotes: [])
         messages.removeAll(keepingCapacity: true)
         replyTarget = nil
         connectionState = .connecting
@@ -122,6 +124,11 @@ final class ChatStore {
     func failChannelResolution() {
         connectionState = .failed
         showsConnectionError = true
+    }
+
+    func setThirdPartyEmoteCatalog(_ catalog: ThirdPartyEmoteCatalog) {
+        thirdPartyEmoteCatalog = catalog
+        messages = messages.map(enrich)
     }
 
     func suspend() async {
@@ -171,6 +178,7 @@ final class ChatStore {
         channel = nil
         activeLease = nil
         localAuthor = nil
+        thirdPartyEmoteCatalog = ThirdPartyEmoteCatalog(emotes: [])
         messages.removeAll(keepingCapacity: false)
         composerText = ""
         replyTarget = nil
@@ -204,17 +212,19 @@ final class ChatStore {
         let replyParentMessageID = selectedReply.flatMap { replyParentID(for: $0) }
         let nonce = UUID().uuidString.lowercased()
         let now = Date()
-        let localMessage = ChatMessage(
-            id: "local-\(nonce)",
-            channelID: channel.id,
-            channelLogin: channel.login,
-            author: author,
-            text: text,
-            timestamp: ISO8601DateFormatter().string(from: now),
-            timestampMilliseconds: Int64((now.timeIntervalSince1970 * 1_000).rounded(.towardZero)),
-            reply: makeLocalReplyContext(message: selectedReply, parentID: replyParentMessageID),
-            outgoingState: .sending,
-            clientNonce: nonce
+        let localMessage = enrich(
+            ChatMessage(
+                id: "local-\(nonce)",
+                channelID: channel.id,
+                channelLogin: channel.login,
+                author: author,
+                text: text,
+                timestamp: ISO8601DateFormatter().string(from: now),
+                timestampMilliseconds: Int64((now.timeIntervalSince1970 * 1_000).rounded(.towardZero)),
+                reply: makeLocalReplyContext(message: selectedReply, parentID: replyParentMessageID),
+                outgoingState: .sending,
+                clientNonce: nonce
+            )
         )
 
         composerText = ""
@@ -298,6 +308,7 @@ final class ChatStore {
     }
 
     private func applyServerMessage(_ message: ChatMessage) {
+        let message = enrich(message)
         if let optimisticIndex = messages.firstIndex(where: { $0.serverMessageID == message.id }) {
             messages[optimisticIndex] = message
             return
@@ -370,6 +381,42 @@ final class ChatStore {
             parentUserID: message.author.id,
             parentUserLogin: message.author.login,
             parentUserName: message.author.displayName
+        )
+    }
+
+    private func enrich(_ message: ChatMessage) -> ChatMessage {
+        let fragments = ThirdPartyEmoteParser.apply(
+            to: message.fragments,
+            catalog: thirdPartyEmoteCatalog
+        )
+        guard fragments != message.fragments else {
+            return message
+        }
+        return replacingFragments(message, fragments: fragments)
+    }
+
+    private func replacingFragments(
+        _ message: ChatMessage,
+        fragments: [ChatFragment]
+    ) -> ChatMessage {
+        ChatMessage(
+            id: message.id,
+            eventSubMessageID: message.eventSubMessageID,
+            channelID: message.channelID,
+            channelLogin: message.channelLogin,
+            author: message.author,
+            text: message.text,
+            fragments: fragments,
+            timestamp: message.timestamp,
+            timestampMilliseconds: message.timestampMilliseconds,
+            reply: message.reply,
+            reward: message.reward,
+            type: message.type,
+            flags: message.flags,
+            outgoingState: message.outgoingState,
+            outgoingError: message.outgoingError,
+            clientNonce: message.clientNonce,
+            serverMessageID: message.serverMessageID
         )
     }
 

@@ -13,17 +13,32 @@ protocol ChatBadgeLoading: Sendable {
 
 extension TwitchChatAssetsAPIClient: ChatBadgeLoading {}
 
+protocol BetterTTVEmoteLoading: Sendable {
+    func getGlobalEmotes() async throws -> [ThirdPartyEmoteDefinition]
+    func getChannelEmotes(twitchUserID: String) async throws -> [ThirdPartyEmoteDefinition]
+}
+
+extension BetterTTVAPIClient: BetterTTVEmoteLoading {}
+
 @MainActor
 @Observable
 final class ChatAssetStore {
     private(set) var badgeAssets: [String: ChatBadgeAsset] = [:]
+    private(set) var thirdPartyEmoteCatalog = ThirdPartyEmoteCatalog(emotes: [])
     private(set) var isLoadingBadges = false
+    private(set) var isLoadingThirdPartyEmotes = false
 
     @ObservationIgnored private let badges: any ChatBadgeLoading
-    @ObservationIgnored private var loadGeneration = 0
+    @ObservationIgnored private let betterTTV: any BetterTTVEmoteLoading
+    @ObservationIgnored private var badgeLoadGeneration = 0
+    @ObservationIgnored private var emoteLoadGeneration = 0
 
-    init(badges: (any ChatBadgeLoading)? = nil) {
+    init(
+        badges: (any ChatBadgeLoading)? = nil,
+        betterTTV: (any BetterTTVEmoteLoading)? = nil
+    ) {
         self.badges = badges ?? TwitchChatAssetsAPIClient()
+        self.betterTTV = betterTTV ?? BetterTTVAPIClient()
     }
 
     func loadBadges(
@@ -31,29 +46,26 @@ final class ChatAssetStore {
         accessToken: String,
         broadcasterID: String
     ) async {
-        loadGeneration &+= 1
-        let generation = loadGeneration
+        badgeLoadGeneration &+= 1
+        let generation = badgeLoadGeneration
         isLoadingBadges = true
         defer {
-            if loadGeneration == generation {
+            if badgeLoadGeneration == generation {
                 isLoadingBadges = false
             }
         }
 
-        let global = (try? await badges.getGlobalBadges(
+        async let globalRequest = optionalGlobalBadges(
             clientID: clientID,
             accessToken: accessToken
-        )) ?? []
-        guard loadGeneration == generation else {
-            return
-        }
-
-        let channel = (try? await badges.getChannelBadges(
+        )
+        async let channelRequest = optionalChannelBadges(
             clientID: clientID,
             accessToken: accessToken,
             broadcasterID: broadcasterID
-        )) ?? []
-        guard loadGeneration == generation else {
+        )
+        let (global, channel) = await (globalRequest, channelRequest)
+        guard badgeLoadGeneration == generation else {
             return
         }
 
@@ -64,9 +76,64 @@ final class ChatAssetStore {
         badgeAssets = merged
     }
 
+    func loadBetterTTV(twitchUserID: String) async {
+        emoteLoadGeneration &+= 1
+        let generation = emoteLoadGeneration
+        isLoadingThirdPartyEmotes = true
+        defer {
+            if emoteLoadGeneration == generation {
+                isLoadingThirdPartyEmotes = false
+            }
+        }
+
+        async let globalRequest = optionalGlobalBetterTTVEmotes()
+        async let channelRequest = optionalChannelBetterTTVEmotes(twitchUserID: twitchUserID)
+        let (global, channel) = await (globalRequest, channelRequest)
+        guard emoteLoadGeneration == generation else {
+            return
+        }
+
+        thirdPartyEmoteCatalog = .merging(global: global, channel: channel)
+    }
+
     func reset() {
-        loadGeneration &+= 1
+        badgeLoadGeneration &+= 1
+        emoteLoadGeneration &+= 1
         badgeAssets.removeAll(keepingCapacity: false)
+        thirdPartyEmoteCatalog = ThirdPartyEmoteCatalog(emotes: [])
         isLoadingBadges = false
+        isLoadingThirdPartyEmotes = false
+    }
+
+    private func optionalGlobalBadges(
+        clientID: String,
+        accessToken: String
+    ) async -> [ChatBadgeAsset] {
+        (try? await badges.getGlobalBadges(
+            clientID: clientID,
+            accessToken: accessToken
+        )) ?? []
+    }
+
+    private func optionalChannelBadges(
+        clientID: String,
+        accessToken: String,
+        broadcasterID: String
+    ) async -> [ChatBadgeAsset] {
+        (try? await badges.getChannelBadges(
+            clientID: clientID,
+            accessToken: accessToken,
+            broadcasterID: broadcasterID
+        )) ?? []
+    }
+
+    private func optionalGlobalBetterTTVEmotes() async -> [ThirdPartyEmoteDefinition] {
+        (try? await betterTTV.getGlobalEmotes()) ?? []
+    }
+
+    private func optionalChannelBetterTTVEmotes(
+        twitchUserID: String
+    ) async -> [ThirdPartyEmoteDefinition] {
+        (try? await betterTTV.getChannelEmotes(twitchUserID: twitchUserID)) ?? []
     }
 }

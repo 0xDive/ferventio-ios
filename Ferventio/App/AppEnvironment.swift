@@ -96,6 +96,7 @@ final class AppEnvironment {
 
         do {
             let channel = try await twitchBootstrap.resolveChannel(login: login, for: grant)
+            chatAssetStore.reset()
             await chatStore.connect(
                 channel: channel,
                 lease: grant.accessLease,
@@ -104,11 +105,19 @@ final class AppEnvironment {
             guard chatStore.connectionState == .connected else {
                 return
             }
-            await chatAssetStore.loadBadges(
+
+            async let badges: Void = chatAssetStore.loadBadges(
                 clientID: grant.accessLease.session.clientID,
                 accessToken: grant.accessLease.accessToken,
                 broadcasterID: channel.id
             )
+            async let betterTTV: Void = chatAssetStore.loadBetterTTV(twitchUserID: channel.id)
+            _ = await (badges, betterTTV)
+
+            guard chatStore.channel?.id == channel.id else {
+                return
+            }
+            chatStore.setThirdPartyEmoteCatalog(chatAssetStore.thirdPartyEmoteCatalog)
         } catch {
             chatStore.failChannelResolution()
         }

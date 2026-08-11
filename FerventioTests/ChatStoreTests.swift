@@ -38,6 +38,48 @@ struct ChatStoreTests {
     }
 
     @Test
+    func thirdPartyCatalogEnrichesExistingAndFutureMessages() {
+        let store = ChatStore()
+        let definition = ThirdPartyEmoteDefinition(
+            code: "OMEGALUL",
+            emoteID: "bttv-1",
+            provider: "bttv",
+            animated: false,
+            imageURL: "https://example.com/omegalul"
+        )
+
+        store.apply(.message(makeMessage(1, text: "hello OMEGALUL")))
+        #expect(store.messages[0].fragments == [.text("hello OMEGALUL")])
+
+        store.setThirdPartyEmoteCatalog(ThirdPartyEmoteCatalog(emotes: [definition]))
+
+        #expect(store.messages[0].fragments == [
+            .text("hello"),
+            .text(" "),
+            .thirdPartyEmote(
+                text: "OMEGALUL",
+                emoteID: "bttv-1",
+                provider: "bttv",
+                animated: false,
+                imageURL: "https://example.com/omegalul",
+                zeroWidth: false
+            ),
+        ])
+
+        store.apply(.message(makeMessage(2, text: "OMEGALUL")))
+        #expect(store.messages[1].fragments == [
+            .thirdPartyEmote(
+                text: "OMEGALUL",
+                emoteID: "bttv-1",
+                provider: "bttv",
+                animated: false,
+                imageURL: "https://example.com/omegalul",
+                zeroWidth: false
+            )
+        ])
+    }
+
+    @Test
     func suspendAndResumePreserveMessagesDraftAndReplyTarget() async {
         let eventSub = StubEventSubChatClient()
         let sender = StubChatMessageSender(
