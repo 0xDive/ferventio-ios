@@ -214,7 +214,7 @@ private struct ChatFragmentView: View {
                 url: ChatAssetResolver.twitchEmoteURL(
                     emoteID: emoteID,
                     formats: formats,
-                    animate: false,
+                    animate: true,
                     scale: .medium
                 ),
                 fallbackText: text,
@@ -268,30 +268,37 @@ private struct RemoteChatImage: View {
     let fallbackText: String
     let accessibilityLabel: String
 
+    @State private var asset: ChatImageAsset?
+    @State private var loadedURL: URL?
+    @State private var failedURL: URL?
+
     var body: some View {
-        if let url {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case let .success(image):
-                    image
-                        .resizable()
-                        .scaledToFit()
-                case .failure:
-                    Text(fallbackText)
-                        .font(.body)
-                case .empty:
-                    ProgressView()
-                        .controlSize(.mini)
-                @unknown default:
-                    Text(fallbackText)
-                        .font(.body)
-                }
+        Group {
+            if let url, loadedURL == url, let asset {
+                ChatUIImageView(image: asset.image)
+            } else if let url, failedURL != url {
+                ProgressView()
+                    .controlSize(.mini)
+            } else {
+                Text(fallbackText)
+                    .font(.body)
             }
-            .frame(width: 28, height: 28)
-            .accessibilityLabel(Text(accessibilityLabel))
-        } else {
-            Text(fallbackText)
-                .font(.body)
+        }
+        .frame(width: 28, height: 28)
+        .accessibilityLabel(Text(accessibilityLabel))
+        .task(id: url) {
+            asset = nil
+            loadedURL = nil
+            failedURL = nil
+            guard let url else {
+                return
+            }
+            if let image = await ChatImagePipeline.shared.image(for: url), !Task.isCancelled {
+                asset = image
+                loadedURL = url
+            } else if !Task.isCancelled {
+                failedURL = url
+            }
         }
     }
 }
