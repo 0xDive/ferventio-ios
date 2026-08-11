@@ -12,6 +12,7 @@ final class AppEnvironment {
     var isSigningOut = false
     var showsAuthenticationError = false
     let chatStore: ChatStore
+    let chatAssetStore: ChatAssetStore
 
     @ObservationIgnored private let authService: any Authenticating
     @ObservationIgnored private let twitchBootstrap: any TwitchBootstrapping
@@ -20,11 +21,13 @@ final class AppEnvironment {
     init(
         authService: (any Authenticating)? = nil,
         twitchBootstrap: (any TwitchBootstrapping)? = nil,
-        chatStore: ChatStore? = nil
+        chatStore: ChatStore? = nil,
+        chatAssetStore: ChatAssetStore? = nil
     ) {
         self.authService = authService ?? AuthService.live()
         self.twitchBootstrap = twitchBootstrap ?? TwitchBootstrapService()
         self.chatStore = chatStore ?? ChatStore()
+        self.chatAssetStore = chatAssetStore ?? ChatAssetStore()
     }
 
     func start() async {
@@ -70,6 +73,7 @@ final class AppEnvironment {
         defer { isSigningOut = false }
 
         await chatStore.disconnect()
+        chatAssetStore.reset()
         do {
             try await authService.signOut()
             clearSession()
@@ -96,6 +100,14 @@ final class AppEnvironment {
                 channel: channel,
                 lease: grant.accessLease,
                 currentUser: currentUser
+            )
+            guard chatStore.connectionState == .connected else {
+                return
+            }
+            await chatAssetStore.loadBadges(
+                clientID: grant.accessLease.session.clientID,
+                accessToken: grant.accessLease.accessToken,
+                broadcasterID: channel.id
             )
         } catch {
             chatStore.failChannelResolution()
@@ -131,5 +143,6 @@ final class AppEnvironment {
         authenticationGrant = nil
         session = nil
         currentUser = nil
+        chatAssetStore.reset()
     }
 }
