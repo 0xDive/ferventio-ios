@@ -16,19 +16,24 @@ final class AppEnvironment {
 
     @ObservationIgnored private let authService: any Authenticating
     @ObservationIgnored private let twitchBootstrap: any TwitchBootstrapping
+    @ObservationIgnored private let chatHistoryPreferencesStore: ChatHistoryPreferencesStore
     @ObservationIgnored private var authenticationGrant: AuthenticationGrant?
 
     init(
         authService: (any Authenticating)? = nil,
         twitchBootstrap: (any TwitchBootstrapping)? = nil,
         chatStore: ChatStore? = nil,
-        chatAssetStore: ChatAssetStore? = nil
+        chatAssetStore: ChatAssetStore? = nil,
+        chatHistoryPreferencesStore: ChatHistoryPreferencesStore? = nil
     ) {
         self.authService = authService ?? AuthService.live()
         self.twitchBootstrap = twitchBootstrap ?? TwitchBootstrapService()
+        let preferencesStore = chatHistoryPreferencesStore ?? ChatHistoryPreferencesStore()
+        self.chatHistoryPreferencesStore = preferencesStore
         self.chatStore = chatStore ?? ChatStore(
             history: ChatHistoryFactory.live(),
-            recentMessagesLoader: RecentMessagesLoaderFactory.live()
+            recentMessagesLoader: RecentMessagesLoaderFactory.live(),
+            historyPreferences: preferencesStore.load()
         )
         self.chatAssetStore = chatAssetStore ?? ChatAssetStore()
     }
@@ -126,6 +131,19 @@ final class AppEnvironment {
         } catch {
             chatStore.failChannelResolution()
         }
+    }
+
+    func chatHistoryPreferences() -> ChatHistoryPreferences {
+        chatHistoryPreferencesStore.load()
+    }
+
+    @discardableResult
+    func updateChatHistoryPreferences(
+        _ preferences: ChatHistoryPreferences
+    ) async -> ChatHistoryPreferences {
+        let saved = chatHistoryPreferencesStore.save(preferences)
+        await chatStore.updateHistoryPreferences(saved)
+        return saved
     }
 
     func applicationDidEnterBackground() async {

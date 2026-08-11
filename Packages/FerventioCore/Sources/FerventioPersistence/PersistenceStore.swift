@@ -2,13 +2,37 @@ import Foundation
 import FerventioDomain
 import GRDB
 
+public struct PersistenceDatabaseStats: Equatable, Sendable {
+    public let pageSizeBytes: Int64
+    public let pageCount: Int64
+    public let freePageCount: Int64
+
+    public init(
+        pageSizeBytes: Int64,
+        pageCount: Int64,
+        freePageCount: Int64
+    ) {
+        self.pageSizeBytes = pageSizeBytes
+        self.pageCount = pageCount
+        self.freePageCount = freePageCount
+    }
+
+    public var usedBytes: Int64 {
+        pageSizeBytes * max(0, pageCount - freePageCount)
+    }
+}
+
 public actor PersistenceStore {
     public enum Error: Swift.Error, Equatable {
         case invalidLimit
         case invalidRetentionBoundary
+        case invalidDatabaseSize
     }
 
     public static let payloadFormatVersion = 1
+    public static let maximumDatabaseSizeMB = 1_024
+    public static let defaultSizeTrimBatch = 500
+    public static let defaultMaximumSizeTrimPasses = 20
 
     private let databaseQueue: DatabaseQueue
     private let encoder: JSONEncoder
@@ -138,6 +162,59 @@ public actor PersistenceStore {
         }
     }
 
+    public func databaseStats() throws -> PersistenceDatabaseStats {
+        try databaseQueue.read { db in
+            try Self.databaseStats(db)
+        }
+    }
+
+    @discardableResult
+    public func enforceMaximumSize(
+        megabytes: Int,
+        trimBatch: Int = defaultSizeTrimBatch,
+        maximumPasses: Int = defaultMaximumSizeTrimPasses
+    ) throws -> Int {
+        guard (0...Self.maximumDatabaseSizeMB).contains(megabytes) else {
+            throw Error.invalidDatabaseSize
+        }
+        guard trimBatch > 0, maximumPasses > 0 else {
+            throw Error.invalidLimit
+        }
+        guard megabytes > 0 else {
+            return 0
+        }
+
+        let maximumBytes = Int64(megabytes) * 1_024 * 1_024
+        return try databaseQueue.write { db in
+            var totalDeleted = 0
+            for _ in 0..<maximumPasses {
+                let stats = try Self.databaseStats(db)
+                if stats.usedBytes <= maximumBytes {
+                    break
+                }
+
+                try db.execute(
+                    sql: """
+                    DELETE FROM chat_messages
+                    WHERE rowid IN (
+                        SELECT rowid
+                        FROM chat_messages
+                        ORDER BY timestamp_ms ASC, message_id ASC
+                        LIMIT ?
+                    )
+                    """,
+                    arguments: [trimBatch]
+                )
+                let deleted = db.changesCount
+                totalDeleted += deleted
+                if deleted == 0 {
+                    break
+                }
+            }
+            return totalDeleted
+        }
+    }
+
     public func count(channelID: String? = nil) throws -> Int {
         try databaseQueue.read { db in
             if let channelID {
@@ -188,6 +265,17 @@ public actor PersistenceStore {
             )
         }
         return migrator
+    }
+
+    private static func databaseStats(_ db: Database) throws -> PersistenceDatabaseStats {
+        let pageSize = try Int64.fetchOne(db, sql: "PRAGMA page_size") ?? 0
+        let pageCount = try Int64.fetchOne(db, sql: "PRAGMA page_count") ?? 0
+        let freePageCount = try Int64.fetchOne(db, sql: "PRAGMA freelist_count") ?? 0
+        return PersistenceDatabaseStats(
+            pageSizeBytes: pageSize,
+            pageCount: pageCount,
+            freePageCount: freePageCount
+        )
     }
 
     private static func upsert(

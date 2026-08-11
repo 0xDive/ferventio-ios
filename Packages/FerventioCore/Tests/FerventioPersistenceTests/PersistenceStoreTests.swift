@@ -123,7 +123,63 @@ struct PersistenceStoreTests {
     }
 
     @Test
-    func rejectsInvalidLimitsAndRetentionBoundaries() async throws {
+    func reportsUsedDatabasePages() async throws {
+        let store = try PersistenceStore.inMemory()
+        try await store.save(makeMessage(id: "message", timestamp: 1, text: "hello"))
+
+        let stats = try await store.databaseStats()
+
+        #expect(stats.pageSizeBytes > 0)
+        #expect(stats.pageCount > 0)
+        #expect(stats.freePageCount >= 0)
+        #expect(stats.usedBytes > 0)
+    }
+
+    @Test
+    func zeroDatabaseCapMeansUnlimitedAndDeletesNothing() async throws {
+        let store = try PersistenceStore.inMemory()
+        try await store.save((0..<20).map { index in
+            makeMessage(id: "message-\(index)", timestamp: Int64(index), text: "payload")
+        })
+
+        let deleted = try await store.enforceMaximumSize(megabytes: 0)
+
+        #expect(deleted == 0)
+        #expect(try await store.count() == 20)
+    }
+
+    @Test
+    func positiveDatabaseCapDeletesOldestRowsUntilUsedPagesFit() async throws {
+        let store = try PersistenceStore.inMemory()
+        let payload = String(repeating: "x", count: 12_000)
+        try await store.save((0..<220).map { index in
+            makeMessage(
+                id: String(format: "message-%04d", index),
+                timestamp: Int64(index),
+                text: payload
+            )
+        })
+        let before = try await store.databaseStats()
+        #expect(before.usedBytes > 1_024 * 1_024)
+
+        let deleted = try await store.enforceMaximumSize(
+            megabytes: 1,
+            trimBatch: 25,
+            maximumPasses: 20
+        )
+        let after = try await store.databaseStats()
+        let remaining = try await store.recentMessages(channelID: "channel", limit: 220)
+
+        #expect(deleted > 0)
+        #expect(after.usedBytes <= 1_024 * 1_024)
+        #expect(remaining.count < 220)
+        if let first = remaining.first {
+            #expect(first.timestampMilliseconds > 0)
+        }
+    }
+
+    @Test
+    func rejectsInvalidLimitsRetentionAndDatabaseSize() async throws {
         let store = try PersistenceStore.inMemory()
 
         await #expect(throws: PersistenceStore.Error.invalidLimit) {
@@ -134,6 +190,12 @@ struct PersistenceStoreTests {
         }
         await #expect(throws: PersistenceStore.Error.invalidRetentionBoundary) {
             try await store.prune(olderThanTimestampMilliseconds: -1)
+        }
+        await #expect(throws: PersistenceStore.Error.invalidDatabaseSize) {
+            try await store.enforceMaximumSize(megabytes: -1)
+        }
+        await #expect(throws: PersistenceStore.Error.invalidDatabaseSize) {
+            try await store.enforceMaximumSize(megabytes: 1_025)
         }
     }
 

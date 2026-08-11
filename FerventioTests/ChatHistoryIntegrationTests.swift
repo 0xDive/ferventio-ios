@@ -11,7 +11,8 @@ struct ChatHistoryIntegrationTests {
         let history = StubChatHistory(recent: [historical])
         let store = ChatStore(
             client: IdleEventSubClient(),
-            history: history
+            history: history,
+            recentMessagesLoader: NoopRecentMessagesLoader()
         )
 
         await store.connect(
@@ -24,8 +25,9 @@ struct ChatHistoryIntegrationTests {
         #expect(store.messages == [historical])
         let maintenance = await history.recordedMaintenance()
         #expect(maintenance?.channelID == "channel")
-        #expect(maintenance?.keepingLatest == ChatStore.maximumPersistedMessagesPerChannel)
-        #expect(maintenance?.olderThanTimestampMilliseconds ?? -1 >= 0)
+        #expect(maintenance?.keepingLatest == 500)
+        #expect(maintenance?.retentionBoundaryMilliseconds != nil)
+        #expect(maintenance?.maxDatabaseSizeMB == 0)
 
         await store.disconnect()
     }
@@ -101,11 +103,110 @@ struct ChatHistoryIntegrationTests {
     }
 
     @Test
+    func localHistoryDisabledSkipsMaintenanceRestoreAndRemotePersistence() async {
+        let historical = makeMessage(id: "history-1", timestamp: 100)
+        let remote = makeMessage(id: "remote-1", timestamp: 200)
+        let history = StubChatHistory(recent: [historical])
+        let preferences = ChatHistoryPreferences(
+            recentMessagesEnabled: true,
+            localHistoryEnabled: false,
+            localHistoryLimit: 1_000,
+            retentionDays: 30,
+            maxDatabaseSizeMB: 128
+        )
+        let store = ChatStore(
+            client: IdleEventSubClient(),
+            history: history,
+            recentMessagesLoader: NoopRecentMessagesLoader(),
+            historyPreferences: preferences
+        )
+
+        await store.connect(
+            channel: makeChannel(),
+            lease: makeLease(),
+            currentUser: nil
+        )
+        await store.mergeRecentMessages([remote])
+
+        #expect(store.messages.map(\.id) == ["remote-1"])
+        #expect(await history.recordedMaintenance() == nil)
+        #expect(await history.recordedRecentLoadCount() == 0)
+        #expect(await history.recordedEnqueued().isEmpty)
+        await store.disconnect()
+    }
+
+    @Test
+    func recentMessagesDisabledDoesNotCallRemoteLoader() async {
+        let loader = StubRecentMessagesLoader(
+            result: TwitchRecentMessagesResult(
+                messages: [makeMessage(id: "remote", timestamp: 200)]
+            )
+        )
+        let preferences = ChatHistoryPreferences(
+            recentMessagesEnabled: false,
+            localHistoryEnabled: true,
+            localHistoryLimit: 500,
+            retentionDays: 0,
+            maxDatabaseSizeMB: 0
+        )
+        let history = StubChatHistory()
+        let store = ChatStore(
+            client: IdleEventSubClient(),
+            history: history,
+            recentMessagesLoader: loader,
+            historyPreferences: preferences
+        )
+
+        await store.connect(
+            channel: makeChannel(),
+            lease: makeLease(),
+            currentUser: nil
+        )
+        for _ in 0..<10 { await Task.yield() }
+
+        #expect(await loader.recordedLoadCount() == 0)
+        let maintenance = await history.recordedMaintenance()
+        #expect(maintenance?.retentionBoundaryMilliseconds == nil)
+        await store.disconnect()
+    }
+
+    @Test
+    func historyPreferencesDriveRestoreLimitAndDatabaseCap() async {
+        let history = StubChatHistory()
+        let preferences = ChatHistoryPreferences(
+            recentMessagesEnabled: false,
+            localHistoryEnabled: true,
+            localHistoryLimit: 3_000,
+            retentionDays: 14,
+            maxDatabaseSizeMB: 256
+        )
+        let store = ChatStore(
+            client: IdleEventSubClient(),
+            history: history,
+            recentMessagesLoader: NoopRecentMessagesLoader(),
+            historyPreferences: preferences
+        )
+
+        await store.connect(
+            channel: makeChannel(),
+            lease: makeLease(),
+            currentUser: nil
+        )
+
+        #expect(await history.recordedRecentLimit() == 500)
+        let maintenance = await history.recordedMaintenance()
+        #expect(maintenance?.keepingLatest == 3_000)
+        #expect(maintenance?.maxDatabaseSizeMB == 256)
+        await store.disconnect()
+    }
+
+    @Test
     func backgroundAndDisconnectFlushPendingHistory() async {
         let history = StubChatHistory()
         let store = ChatStore(
             client: IdleEventSubClient(),
-            history: history
+            history: history,
+            recentMessagesLoader: NoopRecentMessagesLoader()
         )
 
         await store.connect(
@@ -160,23 +261,28 @@ struct ChatHistoryIntegrationTests {
 }
 
 private actor StubChatHistory: ChatHistoryPersisting {
-    struct Maintenance: Sendable {
+    struct Maintenance: Equatable, Sendable {
         let channelID: String
-        let olderThanTimestampMilliseconds: Int64
+        let retentionBoundaryMilliseconds: Int64?
         let keepingLatest: Int
+        let maxDatabaseSizeMB: Int
     }
 
     private let recent: [ChatMessage]
     private var maintenance: Maintenance?
     private var enqueued: [ChatMessage] = []
     private var flushCount = 0
+    private var recentLoadCount = 0
+    private var recentLimit: Int?
 
     init(recent: [ChatMessage] = []) {
         self.recent = recent
     }
 
     func recentMessages(channelID: String, limit: Int) async -> [ChatMessage] {
-        Array(recent.suffix(limit))
+        recentLoadCount += 1
+        recentLimit = limit
+        return Array(recent.suffix(limit))
     }
 
     func enqueue(_ message: ChatMessage) async {
@@ -185,13 +291,15 @@ private actor StubChatHistory: ChatHistoryPersisting {
 
     func maintain(
         channelID: String,
-        olderThanTimestampMilliseconds: Int64,
-        keepingLatest: Int
+        retentionBoundaryMilliseconds: Int64?,
+        keepingLatest: Int,
+        maxDatabaseSizeMB: Int
     ) async {
         maintenance = Maintenance(
             channelID: channelID,
-            olderThanTimestampMilliseconds: olderThanTimestampMilliseconds,
-            keepingLatest: keepingLatest
+            retentionBoundaryMilliseconds: retentionBoundaryMilliseconds,
+            keepingLatest: keepingLatest,
+            maxDatabaseSizeMB: maxDatabaseSizeMB
         )
     }
 
@@ -199,22 +307,17 @@ private actor StubChatHistory: ChatHistoryPersisting {
         flushCount += 1
     }
 
-    func recordedMaintenance() -> Maintenance? {
-        maintenance
-    }
-
-    func recordedFlushCount() -> Int {
-        flushCount
-    }
-
-    func recordedEnqueued() -> [ChatMessage] {
-        enqueued
-    }
+    func recordedMaintenance() -> Maintenance? { maintenance }
+    func recordedFlushCount() -> Int { flushCount }
+    func recordedEnqueued() -> [ChatMessage] { enqueued }
+    func recordedRecentLoadCount() -> Int { recentLoadCount }
+    func recordedRecentLimit() -> Int? { recentLimit }
 }
 
 private actor StubRecentMessagesLoader: RecentMessagesLoading {
     private let result: TwitchRecentMessagesResult
     private var limit: Int?
+    private var loadCount = 0
 
     init(result: TwitchRecentMessagesResult) {
         self.result = result
@@ -224,13 +327,13 @@ private actor StubRecentMessagesLoader: RecentMessagesLoading {
         channel: ChatChannel,
         limit: Int
     ) async throws -> TwitchRecentMessagesResult {
+        loadCount += 1
         self.limit = limit
         return result
     }
 
-    func recordedLimit() -> Int? {
-        limit
-    }
+    func recordedLimit() -> Int? { limit }
+    func recordedLoadCount() -> Int { loadCount }
 }
 
 private actor IdleEventSubClient: EventSubChatStreaming {

@@ -38,10 +38,7 @@ final class ChatStore {
 
     static let maximumMessages = 2_000
     static let maximumMessageCharacters = 500
-    static let initialHistoryMessages = 500
     static let remoteRecentMessagesLimit = 100
-    static let maximumPersistedMessagesPerChannel = 5_000
-    static let defaultHistoryRetentionMilliseconds: Int64 = 7 * 24 * 60 * 60 * 1_000
 
     var channelInput = ""
     var composerText = ""
@@ -50,6 +47,7 @@ final class ChatStore {
     private(set) var connectionState: ConnectionState = .disconnected
     private(set) var isSending = false
     private(set) var replyTarget: ChatMessage?
+    private(set) var historyPreferences: ChatHistoryPreferences
     var showsConnectionError = false
     var showsSendError = false
 
@@ -76,17 +74,39 @@ final class ChatStore {
         client: (any EventSubChatStreaming)? = nil,
         sender: (any ChatMessageSending)? = nil,
         history: (any ChatHistoryPersisting)? = nil,
-        recentMessagesLoader: (any RecentMessagesLoading)? = nil
+        recentMessagesLoader: (any RecentMessagesLoading)? = nil,
+        historyPreferences: ChatHistoryPreferences = .default
     ) {
         self.client = client ?? TwitchEventSubChatClient()
         self.sender = sender ?? TwitchChatAPIClient()
         self.history = history ?? NoopChatHistory()
-        self.recentMessagesLoader = recentMessagesLoader ?? RecentMessagesLoaderFactory.live()
+        // Tests and reusable stores must never perform external bootstrap I/O
+        // unless the production composition explicitly injects the live client.
+        self.recentMessagesLoader = recentMessagesLoader ?? NoopRecentMessagesLoader()
+        self.historyPreferences = historyPreferences
     }
 
     func prepareDefaultChannel(login: String) {
         if channelInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             channelInput = login
+        }
+    }
+
+    func updateHistoryPreferences(_ preferences: ChatHistoryPreferences) async {
+        let previous = historyPreferences
+        historyPreferences = preferences
+
+        if previous.localHistoryEnabled && !preferences.localHistoryEnabled {
+            await history.flush()
+        }
+
+        if !preferences.recentMessagesEnabled {
+            recentMessagesTask?.cancel()
+            recentMessagesTask = nil
+        } else if !previous.recentMessagesEnabled,
+                  connectionState == .connected,
+                  let channel {
+            startRecentMessagesBootstrap(channel: channel, generation: generation)
         }
     }
 
@@ -118,24 +138,28 @@ final class ChatStore {
         showsConnectionError = false
         showsSendError = false
 
-        let nowMilliseconds = Int64((Date().timeIntervalSince1970 * 1_000).rounded(.towardZero))
-        let retentionBoundary = max(
-            0,
-            nowMilliseconds - Self.defaultHistoryRetentionMilliseconds
-        )
-        await history.maintain(
-            channelID: channel.id,
-            olderThanTimestampMilliseconds: retentionBoundary,
-            keepingLatest: Self.maximumPersistedMessagesPerChannel
-        )
-        let restoredMessages = await history.recentMessages(
-            channelID: channel.id,
-            limit: Self.initialHistoryMessages
-        )
-        guard generation == currentGeneration else {
-            return
+        if historyPreferences.localHistoryEnabled {
+            let nowMilliseconds = Int64(
+                (Date().timeIntervalSince1970 * 1_000).rounded(.towardZero)
+            )
+            await history.maintain(
+                channelID: channel.id,
+                retentionBoundaryMilliseconds: historyPreferences
+                    .retentionBoundaryMilliseconds(nowMilliseconds: nowMilliseconds),
+                keepingLatest: historyPreferences.localHistoryLimit,
+                maxDatabaseSizeMB: historyPreferences.maxDatabaseSizeMB
+            )
+            let restoredMessages = await history.recentMessages(
+                channelID: channel.id,
+                limit: historyPreferences.initialRestoreLimit
+            )
+            guard generation == currentGeneration else {
+                return
+            }
+            messages = Array(restoredMessages.suffix(Self.maximumMessages))
+        } else {
+            messages.removeAll(keepingCapacity: true)
         }
-        messages = Array(restoredMessages.suffix(Self.maximumMessages))
 
         do {
             _ = try await client.connect(channel: channel, lease: lease)
@@ -144,10 +168,12 @@ final class ChatStore {
             }
             connectionState = .connected
             startReceiving(generation: currentGeneration)
-            startRecentMessagesBootstrap(
-                channel: channel,
-                generation: currentGeneration
-            )
+            if historyPreferences.recentMessagesEnabled {
+                startRecentMessagesBootstrap(
+                    channel: channel,
+                    generation: currentGeneration
+                )
+            }
         } catch {
             guard generation == currentGeneration else {
                 return
@@ -200,10 +226,12 @@ final class ChatStore {
             }
             connectionState = .connected
             startReceiving(generation: currentGeneration)
-            startRecentMessagesBootstrap(
-                channel: channel,
-                generation: currentGeneration
-            )
+            if historyPreferences.recentMessagesEnabled {
+                startRecentMessagesBootstrap(
+                    channel: channel,
+                    generation: currentGeneration
+                )
+            }
         } catch {
             guard generation == currentGeneration else {
                 return
@@ -317,9 +345,7 @@ final class ChatStore {
             return
         }
 
-        let canonicalByID = Dictionary(
-            uniqueKeysWithValues: recent.map { ($0.id, $0) }
-        )
+        let canonicalByID = Dictionary(uniqueKeysWithValues: recent.map { ($0.id, $0) })
         let enrichedRecent = recent.map(enrich)
         let merged = RecentMessagesMerge.merge(
             existing: messages,
@@ -331,6 +357,9 @@ final class ChatStore {
         }
 
         messages = merged.messages
+        guard historyPreferences.localHistoryEnabled else {
+            return
+        }
         for added in merged.addedMessages {
             if let canonical = canonicalByID[added.id] {
                 await history.enqueue(canonical)
@@ -347,7 +376,8 @@ final class ChatStore {
                     guard self.generation == currentGeneration else {
                         return
                     }
-                    if case let .message(message) = event {
+                    if self.historyPreferences.localHistoryEnabled,
+                       case let .message(message) = event {
                         await self.history.enqueue(message)
                     }
                     guard self.generation == currentGeneration else {
@@ -372,6 +402,9 @@ final class ChatStore {
         channel: ChatChannel,
         generation currentGeneration: Int
     ) {
+        guard historyPreferences.recentMessagesEnabled else {
+            return
+        }
         recentMessagesTask?.cancel()
         recentMessagesTask = Task { [weak self] in
             guard let self else { return }
@@ -382,7 +415,8 @@ final class ChatStore {
                 )
                 guard !Task.isCancelled,
                       self.generation == currentGeneration,
-                      self.channel?.id == channel.id else {
+                      self.channel?.id == channel.id,
+                      self.historyPreferences.recentMessagesEnabled else {
                     return
                 }
                 await self.mergeRecentMessages(result.messages)

@@ -7,8 +7,9 @@ protocol ChatHistoryPersisting: Sendable {
     func enqueue(_ message: ChatMessage) async
     func maintain(
         channelID: String,
-        olderThanTimestampMilliseconds: Int64,
-        keepingLatest: Int
+        retentionBoundaryMilliseconds: Int64?,
+        keepingLatest: Int,
+        maxDatabaseSizeMB: Int
     ) async
     func flush() async
 }
@@ -44,16 +45,22 @@ actor PersistenceChatHistory: ChatHistoryPersisting {
 
     func maintain(
         channelID: String,
-        olderThanTimestampMilliseconds: Int64,
-        keepingLatest: Int
+        retentionBoundaryMilliseconds: Int64?,
+        keepingLatest: Int,
+        maxDatabaseSizeMB: Int
     ) async {
-        _ = try? await store.prune(
-            olderThanTimestampMilliseconds: olderThanTimestampMilliseconds
-        )
+        if let retentionBoundaryMilliseconds {
+            _ = try? await store.prune(
+                olderThanTimestampMilliseconds: retentionBoundaryMilliseconds
+            )
+        }
         _ = try? await store.trim(
             channelID: channelID,
             keepingLatest: keepingLatest
         )
+        if maxDatabaseSizeMB > 0 {
+            _ = try? await store.enforceMaximumSize(megabytes: maxDatabaseSizeMB)
+        }
     }
 
     func flush() async {
@@ -87,8 +94,9 @@ struct NoopChatHistory: ChatHistoryPersisting {
 
     func maintain(
         channelID: String,
-        olderThanTimestampMilliseconds: Int64,
-        keepingLatest: Int
+        retentionBoundaryMilliseconds: Int64?,
+        keepingLatest: Int,
+        maxDatabaseSizeMB: Int
     ) async {}
 
     func flush() async {}
