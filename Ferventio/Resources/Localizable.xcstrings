@@ -1,0 +1,24 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "app.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Ferventio" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Ferventio" } }
+      }
+    },
+    "auth.signed_out.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Connect to Twitch" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Подключиться к Twitch" } }
+      }
+    },
+    "auth.signed_out.message" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Authentication will be connected to the Ferventio backend in the next milestone." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Авторизация через backend Ferventio будет подключена на следующем этапе." } }
+      }
+    }
+  },
+  "version" : "1.0"
+}

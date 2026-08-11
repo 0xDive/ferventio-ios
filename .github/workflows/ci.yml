@@ -1,0 +1,40 @@
+name: iOS CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Test core packages
+        run: swift test --package-path Packages/FerventioCore
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build application
+        run: |
+          xcodebuild \
+            -project Ferventio.xcodeproj \
+            -scheme Ferventio \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            build

@@ -1,0 +1,11 @@
+.DS_Store
+.build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+.env
+.env.*
+!.env.example
+Ferventio.xcodeproj/
+Ferventio.xcworkspace/
+.swiftpm/xcode/package.xcworkspace/xcuserdata/

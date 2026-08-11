@@ -1,0 +1,59 @@
+name: Ferventio
+options:
+  bundleIdPrefix: io.ferventio
+  deploymentTarget:
+    iOS: "17.0"
+  xcodeVersion: "16.0"
+  createIntermediateGroups: true
+
+packages:
+  FerventioCore:
+    path: Packages/FerventioCore
+
+targets:
+  Ferventio:
+    type: application
+    platform: iOS
+    sources:
+      - path: Ferventio
+    resources:
+      - path: Ferventio/Resources
+    dependencies:
+      - package: FerventioCore
+        product: FerventioDomain
+      - package: FerventioCore
+        product: FerventioNetworking
+      - package: FerventioCore
+        product: FerventioPersistence
+      - package: FerventioCore
+        product: FerventioSupport
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.ferventio.ios
+        PRODUCT_NAME: Ferventio
+        SWIFT_VERSION: "6.0"
+        CURRENT_PROJECT_VERSION: 1
+        MARKETING_VERSION: 0.0.1
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Ferventio
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.social-networking
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        TARGETED_DEVICE_FAMILY: "1,2"
+    scheme:
+      testTargets:
+        - FerventioTests
+
+  FerventioTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: FerventioTests
+    dependencies:
+      - target: Ferventio
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.ferventio.ios.tests
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "6.0"
