@@ -69,7 +69,7 @@ private final class InMemorySecureStore: SecureKeyValueStoring, @unchecked Senda
 
     func removeValue(forKey key: String) throws {
         lock.withLock {
-            values.removeValue(forKey: key)
+            _ = values.removeValue(forKey: key)
         }
     }
 }
