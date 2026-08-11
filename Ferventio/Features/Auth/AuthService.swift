@@ -3,6 +3,12 @@ import FerventioDomain
 import FerventioNetworking
 import FerventioSupport
 
+protocol TwitchSessionValidating: Sendable {
+    func validateAccessToken(_ token: String) async throws -> TwitchSession
+}
+
+extension TwitchAPIClient: TwitchSessionValidating {}
+
 @MainActor
 protocol Authenticating: AnyObject {
     func restoreAuthentication() async throws -> AuthenticationGrant?
@@ -14,6 +20,7 @@ protocol Authenticating: AnyObject {
 final class AuthService: Authenticating {
     private let configuration: AppConfiguration
     private let backendClient: BackendClient
+    private let twitchClient: any TwitchSessionValidating
     private let identityStore: DeviceIdentityStore
     private let authenticationStore: AuthenticationStore
     private let webAuthentication: WebAuthenticationSessionRunner
@@ -21,12 +28,14 @@ final class AuthService: Authenticating {
     init(
         configuration: AppConfiguration,
         backendClient: BackendClient,
+        twitchClient: any TwitchSessionValidating = TwitchAPIClient(),
         identityStore: DeviceIdentityStore,
         authenticationStore: AuthenticationStore,
         webAuthentication: WebAuthenticationSessionRunner
     ) {
         self.configuration = configuration
         self.backendClient = backendClient
+        self.twitchClient = twitchClient
         self.identityStore = identityStore
         self.authenticationStore = authenticationStore
         self.webAuthentication = webAuthentication
@@ -37,6 +46,7 @@ final class AuthService: Authenticating {
         return AuthService(
             configuration: configuration,
             backendClient: BackendClient(baseURL: configuration.backendURL),
+            twitchClient: TwitchAPIClient(),
             identityStore: DeviceIdentityStore(store: keychain),
             authenticationStore: AuthenticationStore(store: keychain),
             webAuthentication: WebAuthenticationSessionRunner()
@@ -68,21 +78,63 @@ final class AuthService: Authenticating {
         }
 
         let device = try identityStore.loadOrCreate()
-        let lease = try await backendClient.leaseAccessToken(
-            device: device,
-            credential: stored.backendCredential
-        )
-        let updatedCredential = BackendSessionCredential(
-            serverURL: stored.backendCredential.serverURL,
-            token: stored.backendCredential.token,
-            expiresAtEpochMilliseconds: lease.backendSessionExpiresAtEpochMilliseconds
-        )
-        let grant = AuthenticationGrant(
-            backendCredential: updatedCredential,
-            accessLease: lease
-        )
-        try authenticationStore.save(grant)
-        return grant
+        do {
+            let backendLease = try await backendClient.leaseAccessToken(
+                device: device,
+                credential: stored.backendCredential
+            )
+            var grant = makeGrant(
+                credential: stored.backendCredential,
+                lease: backendLease
+            )
+
+            if TwitchAccessLeasePolicy.needsDirectValidationAtStartup(
+                grant.accessLease,
+                nowEpochMilliseconds: Self.epochMilliseconds(Date())
+            ) {
+                do {
+                    grant = try await directlyValidated(grant)
+                } catch {
+                    let refreshedLease = try await backendClient.leaseAccessToken(
+                        device: device,
+                        credential: stored.backendCredential,
+                        forceRefresh: true
+                    )
+                    grant = try await directlyValidated(
+                        makeGrant(credential: stored.backendCredential, lease: refreshedLease)
+                    )
+                }
+            }
+
+            try authenticationStore.save(grant)
+            return grant
+        } catch {
+            if isBackendSessionRejected(error) {
+                try authenticationStore.clear()
+                return nil
+            }
+
+            guard let cachedLease = stored.accessLease,
+                  TwitchAccessLeasePolicy.canUseDuringBackendOutage(
+                    cachedLease,
+                    nowEpochMilliseconds: Self.epochMilliseconds(Date())
+                  ) else {
+                throw error
+            }
+
+            var fallbackGrant = AuthenticationGrant(
+                backendCredential: stored.backendCredential,
+                accessLease: cachedLease
+            )
+            if TwitchAccessLeasePolicy.needsDirectValidationAtStartup(
+                cachedLease,
+                nowEpochMilliseconds: Self.epochMilliseconds(Date())
+            ) {
+                fallbackGrant = try await directlyValidated(fallbackGrant)
+                try authenticationStore.save(fallbackGrant)
+            }
+            return fallbackGrant
+        }
     }
 
     func signIn() async throws -> AuthenticationGrant {
@@ -100,11 +152,17 @@ final class AuthService: Authenticating {
             expectedScheme: configuration.oauthCallbackScheme,
             expectedState: start.state
         )
-        let grant = try await backendClient.completeAuthorization(
+        var grant = try await backendClient.completeAuthorization(
             device: device,
             code: handoff.code,
             state: handoff.state
         )
+        if TwitchAccessLeasePolicy.needsDirectValidationAtStartup(
+            grant.accessLease,
+            nowEpochMilliseconds: Self.epochMilliseconds(Date())
+        ) {
+            grant = try await directlyValidated(grant)
+        }
         try authenticationStore.save(grant)
         return grant
     }
@@ -142,6 +200,41 @@ final class AuthService: Authenticating {
             credential: stored.backendCredential
         )
         try authenticationStore.clear()
+    }
+
+    private func directlyValidated(_ grant: AuthenticationGrant) async throws -> AuthenticationGrant {
+        let validatedSession = try await twitchClient.validateAccessToken(grant.accessLease.accessToken)
+        let validatedLease = try TwitchAccessLeaseValidation.updateAfterDirectValidation(
+            cachedLease: grant.accessLease,
+            validatedSession: validatedSession,
+            requiredScopes: grant.accessLease.session.scopes,
+            nowEpochMilliseconds: Self.epochMilliseconds(Date())
+        )
+        return AuthenticationGrant(
+            backendCredential: grant.backendCredential,
+            accessLease: validatedLease
+        )
+    }
+
+    private func makeGrant(
+        credential: BackendSessionCredential,
+        lease: TwitchAccessLease
+    ) -> AuthenticationGrant {
+        AuthenticationGrant(
+            backendCredential: BackendSessionCredential(
+                serverURL: credential.serverURL,
+                token: credential.token,
+                expiresAtEpochMilliseconds: lease.backendSessionExpiresAtEpochMilliseconds
+            ),
+            accessLease: lease
+        )
+    }
+
+    private func isBackendSessionRejected(_ error: Swift.Error) -> Bool {
+        guard case let BackendClient.Error.httpStatus(status, _) = error else {
+            return false
+        }
+        return status == 401 || status == 403
     }
 
     private func normalized(_ value: String) -> String {
