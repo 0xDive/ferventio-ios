@@ -27,20 +27,30 @@ targets:
         product: FerventioPersistence
       - package: FerventioCore
         product: FerventioSupport
+    info:
+      path: Ferventio/Info.plist
+      properties:
+        CFBundleDisplayName: Ferventio
+        CFBundleURLTypes:
+          - CFBundleTypeRole: Editor
+            CFBundleURLName: Ferventio OAuth
+            CFBundleURLSchemes:
+              - $(PRODUCT_BUNDLE_IDENTIFIER)
+        LSApplicationCategoryType: public.app-category.social-networking
+        UIApplicationSupportsIndirectInputEvents: true
+        UILaunchScreen: {}
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: io.ferventio.ios
         PRODUCT_NAME: Ferventio
         SWIFT_VERSION: "6.0"
         CURRENT_PROJECT_VERSION: 1
         MARKETING_VERSION: 0.0.1
-        GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_CFBundleDisplayName: Ferventio
-        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.social-networking
-        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
-        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
-        INFOPLIST_KEY_UILaunchScreen_Generation: YES
         TARGETED_DEVICE_FAMILY: "1,2"
+      configs:
+        Debug:
+          PRODUCT_BUNDLE_IDENTIFIER: io.ferventio.ios.debug
+        Release:
+          PRODUCT_BUNDLE_IDENTIFIER: io.ferventio.ios
     scheme:
       testTargets:
         - FerventioTests
@@ -52,6 +62,8 @@ targets:
       - path: FerventioTests
     dependencies:
       - target: Ferventio
+      - package: FerventioCore
+        product: FerventioDomain
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: io.ferventio.ios.tests

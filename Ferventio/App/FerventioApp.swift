@@ -8,7 +8,7 @@ struct FerventioApp: App {
         WindowGroup {
             RootView(environment: environment)
                 .task {
-                    environment.start()
+                    await environment.start()
                 }
         }
     }

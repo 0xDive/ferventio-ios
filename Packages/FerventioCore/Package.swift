@@ -18,8 +18,9 @@ let package = Package(
         .target(name: "FerventioDomain"),
         .target(name: "FerventioNetworking", dependencies: ["FerventioDomain"]),
         .target(name: "FerventioPersistence", dependencies: ["FerventioDomain"]),
-        .target(name: "FerventioSupport"),
+        .target(name: "FerventioSupport", dependencies: ["FerventioDomain"]),
         .testTarget(name: "FerventioDomainTests", dependencies: ["FerventioDomain"]),
         .testTarget(name: "FerventioNetworkingTests", dependencies: ["FerventioNetworking"]),
+        .testTarget(name: "FerventioSupportTests", dependencies: ["FerventioDomain", "FerventioSupport"]),
     ]
 )

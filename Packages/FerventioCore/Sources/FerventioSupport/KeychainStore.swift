@@ -1,7 +1,13 @@
 import Foundation
 import Security
 
-public struct KeychainStore: Sendable {
+public protocol SecureKeyValueStoring: Sendable {
+    func set(_ value: String, forKey key: String) throws
+    func string(forKey key: String) throws -> String?
+    func removeValue(forKey key: String) throws
+}
+
+public struct KeychainStore: SecureKeyValueStoring, Sendable {
     public enum Error: Swift.Error, Equatable {
         case unexpectedStatus(OSStatus)
         case invalidData
