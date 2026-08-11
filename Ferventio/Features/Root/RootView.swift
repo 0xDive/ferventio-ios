@@ -58,7 +58,10 @@ struct RootView: View {
         VStack(spacing: 0) {
             accountHeader
             Divider()
-            ChatView(store: environment.chatStore) {
+            ChatView(
+                store: environment.chatStore,
+                assets: environment.chatAssetStore
+            ) {
                 await environment.connectChat()
             }
         }
