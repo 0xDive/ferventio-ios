@@ -3,6 +3,7 @@ import SwiftUI
 
 struct RootView: View {
     @Bindable var environment: AppEnvironment
+    @State private var showsChatHistorySettings = false
 
     var body: some View {
         NavigationStack {
@@ -26,6 +27,13 @@ struct RootView: View {
             Button("common.ok", role: .cancel) {}
         } message: {
             Text("auth.error.message")
+        }
+        .sheet(isPresented: $showsChatHistorySettings) {
+            ChatHistorySettingsView(
+                preferences: environment.chatHistoryPreferences()
+            ) { preferences in
+                _ = await environment.updateChatHistoryPreferences(preferences)
+            }
         }
     }
 
@@ -60,13 +68,20 @@ struct RootView: View {
             Divider()
             ChatView(
                 store: environment.chatStore,
-                assets: environment.chatAssetStore
+                badgeAssets: environment.chatAssetStore.badgeAssets
             ) {
                 await environment.connectChat()
             }
         }
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                Button {
+                    showsChatHistorySettings = true
+                } label: {
+                    Image(systemName: "gearshape")
+                        .accessibilityLabel(Text(settingsLocalized("open")))
+                }
+
                 Button("auth.sign_out", role: .destructive) {
                     Task { await environment.signOut() }
                 }
@@ -113,5 +128,9 @@ struct RootView: View {
                 .font(.system(size: 30))
                 .accessibilityHidden(true)
         }
+    }
+
+    private func settingsLocalized(_ key: String.LocalizationValue) -> String {
+        String(localized: key, table: "Settings")
     }
 }
