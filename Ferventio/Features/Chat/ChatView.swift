@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ChatView: View {
     @Bindable var store: ChatStore
+    @Bindable var assets: ChatAssetStore
     let connect: () async -> Void
 
     var body: some View {
@@ -76,7 +77,10 @@ struct ChatView: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 8) {
                         ForEach(store.messages) { message in
-                            ChatMessageRow(message: message) {
+                            ChatMessageRow(
+                                message: message,
+                                badgeAssets: assets.badgeAssets
+                            ) {
                                 store.beginReply(to: message)
                             }
                             .id(message.id)
@@ -182,60 +186,6 @@ struct ChatView: View {
             "pause.circle"
         case .disconnected, .connected:
             "bubble.left.and.bubble.right"
-        }
-    }
-}
-
-private struct ChatMessageRow: View {
-    let message: ChatMessage
-    let onReply: () -> Void
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
-            VStack(alignment: .leading, spacing: 3) {
-                if let reply = message.reply,
-                   let parentName = reply.parentUserName ?? reply.parentUserLogin {
-                    Text("↪ \(parentName)")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(message.author.displayName)
-                        .font(.subheadline.weight(.semibold))
-                        .lineLimit(1)
-
-                    Text(message.text)
-                        .font(.body)
-                        .textSelection(.enabled)
-                }
-            }
-
-            Spacer(minLength: 4)
-
-            switch message.outgoingState {
-            case .sending:
-                ProgressView()
-                    .controlSize(.mini)
-                    .accessibilityLabel(Text("chat.message.sending"))
-            case .failed:
-                Image(systemName: "exclamationmark.circle.fill")
-                    .foregroundStyle(.red)
-                    .accessibilityLabel(Text("chat.message.failed"))
-            case .none, .sent:
-                EmptyView()
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .combine)
-        .contextMenu {
-            Button {
-                onReply()
-            } label: {
-                Label("chat.reply", systemImage: "arrowshape.turn.up.left")
-            }
-            .disabled(message.outgoingState == .sending || message.outgoingState == .failed)
         }
     }
 }
