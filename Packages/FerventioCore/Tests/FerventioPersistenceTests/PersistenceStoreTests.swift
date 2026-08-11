@@ -126,13 +126,13 @@ struct PersistenceStoreTests {
     func rejectsInvalidLimitsAndRetentionBoundaries() async throws {
         let store = try PersistenceStore.inMemory()
 
-        #expect(throws: PersistenceStore.Error.invalidLimit) {
+        await #expect(throws: PersistenceStore.Error.invalidLimit) {
             try await store.recentMessages(channelID: "channel", limit: 0)
         }
-        #expect(throws: PersistenceStore.Error.invalidLimit) {
+        await #expect(throws: PersistenceStore.Error.invalidLimit) {
             try await store.trim(channelID: "channel", keepingLatest: -1)
         }
-        #expect(throws: PersistenceStore.Error.invalidRetentionBoundary) {
+        await #expect(throws: PersistenceStore.Error.invalidRetentionBoundary) {
             try await store.prune(olderThanTimestampMilliseconds: -1)
         }
     }
