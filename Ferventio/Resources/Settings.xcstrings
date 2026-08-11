@@ -1,0 +1,84 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "cancel" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Cancel" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Отмена" } }
+      }
+    },
+    "chat_history.database_limit" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Maximum database size (MB)" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Максимальный размер базы (МБ)" } }
+      }
+    },
+    "chat_history.local_history" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Local chat history" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Локальная история чата" } }
+      }
+    },
+    "chat_history.local_history.footer" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "History is stored only on this device. A value of 0 for retention or database size means unlimited." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "История хранится только на этом устройстве. Значение 0 для срока хранения или размера базы означает отсутствие ограничения." } }
+      }
+    },
+    "chat_history.local_section" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "On-device history" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "История на устройстве" } }
+      }
+    },
+    "chat_history.message_limit" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Messages per channel" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Сообщений на канал" } }
+      }
+    },
+    "chat_history.recent_messages" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Recent messages on open" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Недавние сообщения при открытии" } }
+      }
+    },
+    "chat_history.recent_messages.footer" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Loads a recent public chat snapshot when opening a channel. Live Twitch chat does not wait for this request." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "При открытии канала загружается недавний публичный снимок чата. Живой чат Twitch не ждёт завершения этого запроса." } }
+      }
+    },
+    "chat_history.retention_days" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Retention (days)" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Срок хранения (дни)" } }
+      }
+    },
+    "chat_history.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Chat history" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "История чата" } }
+      }
+    },
+    "done" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Done" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Готово" } }
+      }
+    },
+    "open" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Settings" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Настройки" } }
+      }
+    },
+    "unlimited" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Unlimited" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Без ограничений" } }
+      }
+    }
+  },
+  "version" : "1.0"
+}
