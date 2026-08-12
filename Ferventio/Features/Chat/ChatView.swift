@@ -5,6 +5,7 @@ struct ChatView: View {
     @Bindable var store: ChatStore
     @Bindable var assets: ChatAssetStore
     @Bindable var historyPager: ChatHistoryPager
+    let repeatCollapseEnabled: Bool
     let connect: () async -> Void
 
     @State private var hasPositionedInitialFeed = false
@@ -105,7 +106,7 @@ struct ChatView: View {
 
     private func repeatGroup(_ group: ChatRepeatGroup) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            ForEach(group.messages.dropLast(), id: \.id) { message in
+            ForEach(group.messages.dropFirst(), id: \.id) { message in
                 Color.clear
                     .frame(height: 0)
                     .id(message.id)
@@ -171,7 +172,10 @@ struct ChatView: View {
     }
 
     private var displayedGroups: [ChatRepeatGroup] {
-        ChatRepeatCollapsePlanner.collapse(displayedMessages)
+        ChatRepeatCollapsePlanner.collapse(
+            displayedMessages,
+            config: ChatRepeatCollapseConfig(enabled: repeatCollapseEnabled)
+        )
     }
 
     private var composerBar: some View {

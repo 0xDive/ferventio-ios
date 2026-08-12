@@ -1,9 +1,10 @@
 import SwiftUI
 
 struct ChatHistorySettingsView: View {
-    let save: (ChatHistoryPreferences) async -> Void
+    let save: (ChatHistoryPreferences, ChatPresentationPreferences) async -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @State private var repeatCollapseEnabled: Bool
     @State private var recentMessagesEnabled: Bool
     @State private var localHistoryEnabled: Bool
     @State private var localHistoryLimit: Int
@@ -13,9 +14,13 @@ struct ChatHistorySettingsView: View {
 
     init(
         preferences: ChatHistoryPreferences,
-        save: @escaping (ChatHistoryPreferences) async -> Void
+        presentationPreferences: ChatPresentationPreferences,
+        save: @escaping (ChatHistoryPreferences, ChatPresentationPreferences) async -> Void
     ) {
         self.save = save
+        _repeatCollapseEnabled = State(
+            initialValue: presentationPreferences.repeatCollapseEnabled
+        )
         _recentMessagesEnabled = State(initialValue: preferences.recentMessagesEnabled)
         _localHistoryEnabled = State(initialValue: preferences.localHistoryEnabled)
         _localHistoryLimit = State(initialValue: preferences.localHistoryLimit)
@@ -26,6 +31,17 @@ struct ChatHistorySettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    Toggle(
+                        localized("chat.repeat_collapse"),
+                        isOn: $repeatCollapseEnabled
+                    )
+                } header: {
+                    Text(localized("chat.section"))
+                } footer: {
+                    Text(localized("chat.repeat_collapse.footer"))
+                }
+
                 Section {
                     Toggle(
                         localized("chat_history.recent_messages"),
@@ -84,7 +100,7 @@ struct ChatHistorySettingsView: View {
                     Text(localized("chat_history.local_history.footer"))
                 }
             }
-            .navigationTitle(Text(localized("chat_history.title")))
+            .navigationTitle(Text(localized("settings.title")))
             .navigationBarTitleDisplayMode(.inline)
             .disabled(isSaving)
             .toolbar {
@@ -99,7 +115,7 @@ struct ChatHistorySettingsView: View {
                     Button(localized("done")) {
                         Task {
                             isSaving = true
-                            await save(currentPreferences)
+                            await save(currentHistoryPreferences, currentPresentationPreferences)
                             isSaving = false
                             dismiss()
                         }
@@ -110,13 +126,19 @@ struct ChatHistorySettingsView: View {
         }
     }
 
-    private var currentPreferences: ChatHistoryPreferences {
+    private var currentHistoryPreferences: ChatHistoryPreferences {
         ChatHistoryPreferences(
             recentMessagesEnabled: recentMessagesEnabled,
             localHistoryEnabled: localHistoryEnabled,
             localHistoryLimit: localHistoryLimit,
             retentionDays: retentionDays,
             maxDatabaseSizeMB: maxDatabaseSizeMB
+        )
+    }
+
+    private var currentPresentationPreferences: ChatPresentationPreferences {
+        ChatPresentationPreferences(
+            repeatCollapseEnabled: repeatCollapseEnabled
         )
     }
 

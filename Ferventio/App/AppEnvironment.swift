@@ -14,10 +14,12 @@ final class AppEnvironment {
     let chatStore: ChatStore
     let chatAssetStore: ChatAssetStore
     let chatHistoryPager: ChatHistoryPager
+    var chatPresentationPreferences: ChatPresentationPreferences
 
     @ObservationIgnored private let authService: any Authenticating
     @ObservationIgnored private let twitchBootstrap: any TwitchBootstrapping
     @ObservationIgnored private let chatHistoryPreferencesStore: ChatHistoryPreferencesStore
+    @ObservationIgnored private let chatPresentationPreferencesStore: ChatPresentationPreferencesStore
     @ObservationIgnored private var authenticationGrant: AuthenticationGrant?
 
     init(
@@ -26,13 +28,18 @@ final class AppEnvironment {
         chatStore: ChatStore? = nil,
         chatAssetStore: ChatAssetStore? = nil,
         chatHistoryPager: ChatHistoryPager? = nil,
-        chatHistoryPreferencesStore: ChatHistoryPreferencesStore? = nil
+        chatHistoryPreferencesStore: ChatHistoryPreferencesStore? = nil,
+        chatPresentationPreferencesStore: ChatPresentationPreferencesStore? = nil
     ) {
         self.authService = authService ?? AuthService.live()
         self.twitchBootstrap = twitchBootstrap ?? TwitchBootstrapService()
         let preferencesStore = chatHistoryPreferencesStore ?? ChatHistoryPreferencesStore()
         let preferences = preferencesStore.load()
         self.chatHistoryPreferencesStore = preferencesStore
+        let presentationPreferencesStore = chatPresentationPreferencesStore
+            ?? ChatPresentationPreferencesStore()
+        self.chatPresentationPreferencesStore = presentationPreferencesStore
+        self.chatPresentationPreferences = presentationPreferencesStore.load()
 
         if let chatStore {
             self.chatStore = chatStore
@@ -162,6 +169,15 @@ final class AppEnvironment {
         let saved = chatHistoryPreferencesStore.save(preferences)
         await chatStore.updateHistoryPreferences(saved)
         chatHistoryPager.updatePreferences(saved)
+        return saved
+    }
+
+    @discardableResult
+    func updateChatPresentationPreferences(
+        _ preferences: ChatPresentationPreferences
+    ) -> ChatPresentationPreferences {
+        let saved = chatPresentationPreferencesStore.save(preferences)
+        chatPresentationPreferences = saved
         return saved
     }
 

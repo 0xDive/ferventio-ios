@@ -7,6 +7,24 @@
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "Отмена" } }
       }
     },
+    "chat.repeat_collapse" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Collapse repeated messages" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Сворачивать повторяющиеся сообщения" } }
+      }
+    },
+    "chat.repeat_collapse.footer" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Groups three or more consecutive identical messages sent within 10 seconds into one row with ×N. Broadcaster, moderator, and VIP messages stay separate." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Объединяет три и более одинаковых сообщений подряд, отправленных в течение 10 секунд, в одну строку со счётчиком ×N. Сообщения владельца канала, модераторов и VIP остаются отдельными." } }
+      }
+    },
+    "chat.section" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Chat" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Чат" } }
+      }
+    },
     "chat_history.database_limit" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Maximum database size (MB)" } },
@@ -68,6 +86,12 @@
       }
     },
     "open" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Settings" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Настройки" } }
+      }
+    },
+    "settings.title" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Settings" } },
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "Настройки" } }

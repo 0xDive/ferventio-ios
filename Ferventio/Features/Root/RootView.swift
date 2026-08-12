@@ -30,9 +30,11 @@ struct RootView: View {
         }
         .sheet(isPresented: $showsChatHistorySettings) {
             ChatHistorySettingsView(
-                preferences: environment.chatHistoryPreferences()
-            ) { preferences in
+                preferences: environment.chatHistoryPreferences(),
+                presentationPreferences: environment.chatPresentationPreferences
+            ) { preferences, presentationPreferences in
                 _ = await environment.updateChatHistoryPreferences(preferences)
+                _ = environment.updateChatPresentationPreferences(presentationPreferences)
             }
         }
     }
@@ -69,7 +71,8 @@ struct RootView: View {
             ChatView(
                 store: environment.chatStore,
                 assets: environment.chatAssetStore,
-                historyPager: environment.chatHistoryPager
+                historyPager: environment.chatHistoryPager,
+                repeatCollapseEnabled: environment.chatPresentationPreferences.repeatCollapseEnabled
             ) {
                 await environment.connectChat()
             }
