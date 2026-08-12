@@ -5,6 +5,7 @@ struct ChatMessageRow: View {
     let message: ChatMessage
     let badgeAssets: [String: ChatBadgeAsset]
     let onReply: () -> Void
+    let onPreviewNuke: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -51,6 +52,15 @@ struct ChatMessageRow: View {
                 Label("chat.reply", systemImage: "arrowshape.turn.up.left")
             }
             .disabled(message.outgoingState == .sending || message.outgoingState == .failed)
+
+            Button {
+                onPreviewNuke()
+            } label: {
+                Label(
+                    String(localized: "nuke.preview", table: "Moderation"),
+                    systemImage: "shield.lefthalf.filled"
+                )
+            }
         }
     }
 

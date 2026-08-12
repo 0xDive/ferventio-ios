@@ -1,0 +1,156 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "nuke.case_sensitive" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Case sensitive" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Учитывать регистр" } }
+      }
+    },
+    "nuke.done" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Done" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Готово" } }
+      }
+    },
+    "nuke.error.empty_query" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Enter text or a regular expression to preview targets." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Введите текст или регулярное выражение для предварительного просмотра целей." } }
+      }
+    },
+    "nuke.error.invalid_regex" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The regular expression is invalid." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Некорректное регулярное выражение." } }
+      }
+    },
+    "nuke.error.query_too_long" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The query is too long." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Запрос слишком длинный." } }
+      }
+    },
+    "nuke.exclude_broadcaster" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Exclude broadcaster" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Исключить владельца канала" } }
+      }
+    },
+    "nuke.exclude_moderators" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Exclude moderators" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Исключить модераторов" } }
+      }
+    },
+    "nuke.exclude_vips" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Exclude VIPs" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Исключить VIP" } }
+      }
+    },
+    "nuke.excluded_matches" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Excluded matches" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Исключено совпадений" } }
+      }
+    },
+    "nuke.exclusions" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Exclusions" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Исключения" } }
+      }
+    },
+    "nuke.match_mode" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Match mode" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Режим поиска" } }
+      }
+    },
+    "nuke.matched_messages" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Matched messages" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Совпавших сообщений" } }
+      }
+    },
+    "nuke.matched_users" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Matched users" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Затронутых пользователей" } }
+      }
+    },
+    "nuke.matching" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Matching" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Поиск" } }
+      }
+    },
+    "nuke.no_matches" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No messages match the current preview." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Текущему предварительному просмотру не соответствует ни одно сообщение." } }
+      }
+    },
+    "nuke.plain_text" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Text" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Текст" } }
+      }
+    },
+    "nuke.preview" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Preview nuke" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Предпросмотр nuke" } }
+      }
+    },
+    "nuke.preview_only" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Preview only: this screen never sends moderation actions." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Только предпросмотр: этот экран не отправляет moderation-действия." } }
+      }
+    },
+    "nuke.query" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Text or regular expression" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Текст или регулярное выражение" } }
+      }
+    },
+    "nuke.regex" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Regex" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Regex" } }
+      }
+    },
+    "nuke.samples" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Examples" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Примеры" } }
+      }
+    },
+    "nuke.summary" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Preview" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Предварительный просмотр" } }
+      }
+    },
+    "nuke.target_users" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Target users" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Целевые пользователи" } }
+      }
+    },
+    "nuke.time_window" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Time window" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Временное окно" } }
+      }
+    },
+    "nuke.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Nuke preview" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Предпросмотр Nuke" } }
+      }
+    }
+  },
+  "version" : "1.0"
+}

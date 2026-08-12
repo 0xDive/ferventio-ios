@@ -1,3 +1,4 @@
+import Foundation
 import FerventioDomain
 import SwiftUI
 
@@ -9,6 +10,7 @@ struct ChatView: View {
     let connect: () async -> Void
 
     @State private var hasPositionedInitialFeed = false
+    @State private var nukePreviewRequest: NukePreviewRequest?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -21,6 +23,13 @@ struct ChatView: View {
         .onChange(of: store.channel?.id, initial: true) { _, channelID in
             historyPager.reset(channelID: channelID)
             hasPositionedInitialFeed = false
+            nukePreviewRequest = nil
+        }
+        .sheet(item: $nukePreviewRequest) { request in
+            NukePreviewView(
+                messages: displayedMessages,
+                initialQuery: request.query
+            )
         }
         .alert(
             String(localized: "chat.error.title"),
@@ -114,10 +123,16 @@ struct ChatView: View {
 
             ChatMessageRow(
                 message: group.representative,
-                badgeAssets: assets.badgeAssets
-            ) {
-                store.beginReply(to: group.representative)
-            }
+                badgeAssets: assets.badgeAssets,
+                onReply: {
+                    store.beginReply(to: group.representative)
+                },
+                onPreviewNuke: {
+                    nukePreviewRequest = NukePreviewRequest(
+                        query: group.representative.text
+                    )
+                }
+            )
             .overlay(alignment: .topTrailing) {
                 if group.repeatCount > 1 {
                     Text("×\(group.repeatCount)")
@@ -269,4 +284,9 @@ struct ChatView: View {
             "bubble.left.and.bubble.right"
         }
     }
+}
+
+private struct NukePreviewRequest: Identifiable {
+    let id = UUID()
+    let query: String
 }
