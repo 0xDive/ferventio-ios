@@ -13,6 +13,7 @@ final class AppEnvironment {
     var showsAuthenticationError = false
     let chatStore: ChatStore
     let chatAssetStore: ChatAssetStore
+    let chatHistoryPager: ChatHistoryPager
 
     @ObservationIgnored private let authService: any Authenticating
     @ObservationIgnored private let twitchBootstrap: any TwitchBootstrapping
@@ -24,17 +25,33 @@ final class AppEnvironment {
         twitchBootstrap: (any TwitchBootstrapping)? = nil,
         chatStore: ChatStore? = nil,
         chatAssetStore: ChatAssetStore? = nil,
+        chatHistoryPager: ChatHistoryPager? = nil,
         chatHistoryPreferencesStore: ChatHistoryPreferencesStore? = nil
     ) {
         self.authService = authService ?? AuthService.live()
         self.twitchBootstrap = twitchBootstrap ?? TwitchBootstrapService()
         let preferencesStore = chatHistoryPreferencesStore ?? ChatHistoryPreferencesStore()
+        let preferences = preferencesStore.load()
         self.chatHistoryPreferencesStore = preferencesStore
-        self.chatStore = chatStore ?? ChatStore(
-            history: ChatHistoryFactory.live(),
-            recentMessagesLoader: RecentMessagesLoaderFactory.live(),
-            historyPreferences: preferencesStore.load()
-        )
+
+        if let chatStore {
+            self.chatStore = chatStore
+            self.chatHistoryPager = chatHistoryPager ?? ChatHistoryPager(
+                history: NoopChatHistory(),
+                preferences: preferences
+            )
+        } else {
+            let history = ChatHistoryFactory.live()
+            self.chatStore = ChatStore(
+                history: history,
+                recentMessagesLoader: RecentMessagesLoaderFactory.live(),
+                historyPreferences: preferences
+            )
+            self.chatHistoryPager = chatHistoryPager ?? ChatHistoryPager(
+                history: history,
+                preferences: preferences
+            )
+        }
         self.chatAssetStore = chatAssetStore ?? ChatAssetStore()
     }
 
@@ -81,6 +98,7 @@ final class AppEnvironment {
         defer { isSigningOut = false }
 
         await chatStore.disconnect()
+        chatHistoryPager.reset(channelID: nil)
         chatAssetStore.reset()
         do {
             try await authService.signOut()
@@ -143,6 +161,7 @@ final class AppEnvironment {
     ) async -> ChatHistoryPreferences {
         let saved = chatHistoryPreferencesStore.save(preferences)
         await chatStore.updateHistoryPreferences(saved)
+        chatHistoryPager.updatePreferences(saved)
         return saved
     }
 
@@ -175,6 +194,7 @@ final class AppEnvironment {
         authenticationGrant = nil
         session = nil
         currentUser = nil
+        chatHistoryPager.reset(channelID: nil)
         chatAssetStore.reset()
     }
 }
