@@ -68,7 +68,7 @@ struct RootView: View {
             Divider()
             ChatView(
                 store: environment.chatStore,
-                badgeAssets: environment.chatAssetStore.badgeAssets
+                assets: environment.chatAssetStore
             ) {
                 await environment.connectChat()
             }
