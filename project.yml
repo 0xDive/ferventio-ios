@@ -66,6 +66,8 @@ targets:
         product: FerventioDomain
       - package: FerventioCore
         product: FerventioNetworking
+      - package: FerventioCore
+        product: FerventioPersistence
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: io.ferventio.ios.tests
