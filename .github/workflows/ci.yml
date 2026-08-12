@@ -38,3 +38,13 @@ jobs:
             -destination 'generic/platform=iOS Simulator' \
             CODE_SIGNING_ALLOWED=NO \
             build
+
+      - name: Build application tests
+        run: |
+          xcodebuild \
+            -project Ferventio.xcodeproj \
+            -scheme Ferventio \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            build-for-testing
