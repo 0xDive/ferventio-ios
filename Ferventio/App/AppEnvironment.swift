@@ -18,6 +18,7 @@ final class AppEnvironment {
 
     @ObservationIgnored private let authService: any Authenticating
     @ObservationIgnored private let twitchBootstrap: any TwitchBootstrapping
+    @ObservationIgnored private let userProfileLoader: any UserProfileLoading
     @ObservationIgnored private let chatHistoryPreferencesStore: ChatHistoryPreferencesStore
     @ObservationIgnored private let chatPresentationPreferencesStore: ChatPresentationPreferencesStore
     @ObservationIgnored private var authenticationGrant: AuthenticationGrant?
@@ -25,6 +26,7 @@ final class AppEnvironment {
     init(
         authService: (any Authenticating)? = nil,
         twitchBootstrap: (any TwitchBootstrapping)? = nil,
+        userProfileLoader: (any UserProfileLoading)? = nil,
         chatStore: ChatStore? = nil,
         chatAssetStore: ChatAssetStore? = nil,
         chatHistoryPager: ChatHistoryPager? = nil,
@@ -33,6 +35,7 @@ final class AppEnvironment {
     ) {
         self.authService = authService ?? AuthService.live()
         self.twitchBootstrap = twitchBootstrap ?? TwitchBootstrapService()
+        self.userProfileLoader = userProfileLoader ?? TwitchUserProfileLoader()
         let preferencesStore = chatHistoryPreferencesStore ?? ChatHistoryPreferencesStore()
         let preferences = preferencesStore.load()
         self.chatHistoryPreferencesStore = preferencesStore
@@ -156,6 +159,13 @@ final class AppEnvironment {
         } catch {
             chatStore.failChannelResolution()
         }
+    }
+
+    func loadUserProfile(for author: ChatAuthor) async -> TwitchUser? {
+        guard let grant = authenticationGrant else {
+            return nil
+        }
+        return try? await userProfileLoader.loadUser(author: author, for: grant)
     }
 
     func chatHistoryPreferences() -> ChatHistoryPreferences {

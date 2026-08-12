@@ -1,0 +1,24 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "user_card.account_created" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Account created" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Аккаунт создан" } } } },
+    "user_card.badges" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Badges and roles" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Значки и роли" } } } },
+    "user_card.broadcaster_type" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Broadcaster type" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Тип канала" } } } },
+    "user_card.chat_context" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Chat context" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Контекст чата" } } } },
+    "user_card.done" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Done" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Готово" } } } },
+    "user_card.first_loaded_message" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "First loaded message" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Первое загруженное сообщение" } } } },
+    "user_card.latest_message" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Latest message" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Последнее сообщение" } } } },
+    "user_card.loaded_messages" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Messages in loaded chat" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Сообщений в загруженном чате" } } } },
+    "user_card.loading_profile" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Loading Twitch profile…" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Загрузка профиля Twitch…" } } } },
+    "user_card.open" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "User card" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Карточка пользователя" } } } },
+    "user_card.profile_unavailable" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Twitch profile details are unavailable. Chat context is still shown below." } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Данные профиля Twitch недоступны. Контекст чата всё равно показан ниже." } } } },
+    "user_card.recent_messages" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Recent messages" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Недавние сообщения" } } } },
+    "user_card.role.broadcaster" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Broadcaster" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Владелец канала" } } } },
+    "user_card.role.moderator" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Moderator" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Модератор" } } } },
+    "user_card.role.vip" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "VIP" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "VIP" } } } },
+    "user_card.roles" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Roles" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Роли" } } } },
+    "user_card.title" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "User" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Пользователь" } } } },
+    "user_card.twitch_profile" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Twitch profile" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Профиль Twitch" } } } }
+  },
+  "version" : "1.0"
+}

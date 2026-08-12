@@ -7,10 +7,11 @@ struct ChatView: View {
     @Bindable var assets: ChatAssetStore
     @Bindable var historyPager: ChatHistoryPager
     let repeatCollapseEnabled: Bool
+    let loadUserProfile: (ChatAuthor) async -> TwitchUser?
     let connect: () async -> Void
 
     @State private var hasPositionedInitialFeed = false
-    @State private var nukePreviewRequest: NukePreviewRequest?
+    @State private var sheetRequest: ChatSheetRequest?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -23,13 +24,24 @@ struct ChatView: View {
         .onChange(of: store.channel?.id, initial: true) { _, channelID in
             historyPager.reset(channelID: channelID)
             hasPositionedInitialFeed = false
-            nukePreviewRequest = nil
+            sheetRequest = nil
         }
-        .sheet(item: $nukePreviewRequest) { request in
-            NukePreviewView(
-                messages: displayedMessages,
-                initialQuery: request.query
-            )
+        .sheet(item: $sheetRequest) { request in
+            switch request.content {
+            case let .nuke(query):
+                NukePreviewView(
+                    messages: displayedMessages,
+                    initialQuery: query
+                )
+            case let .user(author):
+                UserCardView(
+                    author: author,
+                    messages: displayedMessages,
+                    loadProfile: {
+                        await loadUserProfile(author)
+                    }
+                )
+            }
         }
         .alert(
             String(localized: "chat.error.title"),
@@ -124,13 +136,14 @@ struct ChatView: View {
             ChatMessageRow(
                 message: group.representative,
                 badgeAssets: assets.badgeAssets,
+                onOpenUserCard: {
+                    sheetRequest = ChatSheetRequest(.user(group.representative.author))
+                },
                 onReply: {
                     store.beginReply(to: group.representative)
                 },
                 onPreviewNuke: {
-                    nukePreviewRequest = NukePreviewRequest(
-                        query: group.representative.text
-                    )
+                    sheetRequest = ChatSheetRequest(.nuke(group.representative.text))
                 }
             )
             .overlay(alignment: .topTrailing) {
@@ -286,7 +299,16 @@ struct ChatView: View {
     }
 }
 
-private struct NukePreviewRequest: Identifiable {
+private struct ChatSheetRequest: Identifiable {
+    enum Content {
+        case nuke(String)
+        case user(ChatAuthor)
+    }
+
     let id = UUID()
-    let query: String
+    let content: Content
+
+    init(_ content: Content) {
+        self.content = content
+    }
 }

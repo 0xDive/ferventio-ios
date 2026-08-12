@@ -4,6 +4,7 @@ import SwiftUI
 struct ChatMessageRow: View {
     let message: ChatMessage
     let badgeAssets: [String: ChatBadgeAsset]
+    let onOpenUserCard: () -> Void
     let onReply: () -> Void
     let onPreviewNuke: () -> Void
 
@@ -36,6 +37,10 @@ struct ChatMessageRow: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(authorColor)
                     .lineLimit(1)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        onOpenUserCard()
+                    }
 
                 Spacer(minLength: 4)
 
@@ -46,6 +51,15 @@ struct ChatMessageRow: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .contextMenu {
+            Button {
+                onOpenUserCard()
+            } label: {
+                Label(
+                    String(localized: "user_card.open", table: "UserCard"),
+                    systemImage: "person.crop.circle"
+                )
+            }
+
             Button {
                 onReply()
             } label: {
