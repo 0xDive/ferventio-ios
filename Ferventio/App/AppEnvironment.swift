@@ -19,6 +19,7 @@ final class AppEnvironment {
     @ObservationIgnored private let authService: any Authenticating
     @ObservationIgnored private let twitchBootstrap: any TwitchBootstrapping
     @ObservationIgnored private let userProfileLoader: any UserProfileLoading
+    @ObservationIgnored private let nukeExecutor: any NukeExecuting
     @ObservationIgnored private let chatHistoryPreferencesStore: ChatHistoryPreferencesStore
     @ObservationIgnored private let chatPresentationPreferencesStore: ChatPresentationPreferencesStore
     @ObservationIgnored private var authenticationGrant: AuthenticationGrant?
@@ -27,6 +28,7 @@ final class AppEnvironment {
         authService: (any Authenticating)? = nil,
         twitchBootstrap: (any TwitchBootstrapping)? = nil,
         userProfileLoader: (any UserProfileLoading)? = nil,
+        nukeExecutor: (any NukeExecuting)? = nil,
         chatStore: ChatStore? = nil,
         chatAssetStore: ChatAssetStore? = nil,
         chatHistoryPager: ChatHistoryPager? = nil,
@@ -36,6 +38,7 @@ final class AppEnvironment {
         self.authService = authService ?? AuthService.live()
         self.twitchBootstrap = twitchBootstrap ?? TwitchBootstrapService()
         self.userProfileLoader = userProfileLoader ?? TwitchUserProfileLoader()
+        self.nukeExecutor = nukeExecutor ?? TwitchNukeExecutionService()
         let preferencesStore = chatHistoryPreferencesStore ?? ChatHistoryPreferencesStore()
         let preferences = preferencesStore.load()
         self.chatHistoryPreferencesStore = preferencesStore
@@ -63,6 +66,14 @@ final class AppEnvironment {
             )
         }
         self.chatAssetStore = chatAssetStore ?? ChatAssetStore()
+    }
+
+    var canExecuteNuke: Bool {
+        guard let grant = authenticationGrant,
+              chatStore.channel != nil else {
+            return false
+        }
+        return grant.accessLease.session.scopes.contains(TwitchNukeExecutionService.requiredScope)
     }
 
     func start() async {
@@ -166,6 +177,23 @@ final class AppEnvironment {
             return nil
         }
         return try? await userProfileLoader.loadUser(author: author, for: grant)
+    }
+
+    func executeNuke(plan: NukeExecutionPlan) async throws -> NukeExecutionResult {
+        guard let grant = authenticationGrant else {
+            throw NukeExecutionServiceError.notAuthenticated
+        }
+        guard let channel = chatStore.channel else {
+            throw NukeExecutionServiceError.missingChannel
+        }
+        guard grant.accessLease.session.scopes.contains(TwitchNukeExecutionService.requiredScope) else {
+            throw NukeExecutionServiceError.missingScope
+        }
+        return try await nukeExecutor.execute(
+            plan: plan,
+            broadcasterID: channel.id,
+            grant: grant
+        )
     }
 
     func chatHistoryPreferences() -> ChatHistoryPreferences {

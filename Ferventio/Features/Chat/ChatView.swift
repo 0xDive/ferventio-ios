@@ -7,7 +7,9 @@ struct ChatView: View {
     @Bindable var assets: ChatAssetStore
     @Bindable var historyPager: ChatHistoryPager
     let repeatCollapseEnabled: Bool
+    let canExecuteNuke: Bool
     let loadUserProfile: (ChatAuthor) async -> TwitchUser?
+    let executeNuke: (NukeExecutionPlan) async throws -> NukeExecutionResult
     let connect: () async -> Void
 
     @State private var hasPositionedInitialFeed = false
@@ -31,7 +33,9 @@ struct ChatView: View {
             case let .nuke(query):
                 NukePreviewView(
                     messages: displayedMessages,
-                    initialQuery: query
+                    initialQuery: query,
+                    canExecute: canExecuteNuke,
+                    execute: executeNuke
                 )
             case let .user(author):
                 UserCardView(

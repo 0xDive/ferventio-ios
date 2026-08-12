@@ -1,14 +1,29 @@
+import Foundation
 import FerventioDomain
 import SwiftUI
 
 struct NukePreviewView: View {
     let messages: [ChatMessage]
+    let canExecute: Bool
+    let execute: (NukeExecutionPlan) async throws -> NukeExecutionResult
 
     @Environment(\.dismiss) private var dismiss
     @State private var config: NukePreviewConfig
+    @State private var pendingPlan: NukeExecutionPlan?
+    @State private var showsExecutionConfirmation = false
+    @State private var isExecuting = false
+    @State private var executionResult: NukeExecutionResult?
+    @State private var executionError: String?
 
-    init(messages: [ChatMessage], initialQuery: String) {
+    init(
+        messages: [ChatMessage],
+        initialQuery: String,
+        canExecute: Bool,
+        execute: @escaping (NukeExecutionPlan) async throws -> NukeExecutionResult
+    ) {
         self.messages = messages
+        self.canExecute = canExecute
+        self.execute = execute
         _config = State(
             initialValue: NukePreviewConfig(
                 query: String(initialQuery.prefix(NukePreviewPlanner.maximumQueryLength))
@@ -25,7 +40,8 @@ struct NukePreviewView: View {
                 summarySection
                 samplesSection
                 usersSection
-                previewOnlySection
+                executionSection
+                executionResultSection
             }
             .navigationTitle(Text(localized("nuke.title")))
             .navigationBarTitleDisplayMode(.inline)
@@ -34,8 +50,26 @@ struct NukePreviewView: View {
                     Button(localized("nuke.done")) {
                         dismiss()
                     }
+                    .disabled(isExecuting)
                 }
             }
+        }
+        .interactiveDismissDisabled(isExecuting)
+        .alert(
+            executionLocalized("nuke.execution.confirm.title"),
+            isPresented: $showsExecutionConfirmation,
+            presenting: pendingPlan
+        ) { plan in
+            Button(executionLocalized("nuke.execution.cancel"), role: .cancel) {
+                pendingPlan = nil
+            }
+            Button(executionLocalized("nuke.execution.confirm.action"), role: .destructive) {
+                Task {
+                    await performExecution(plan)
+                }
+            }
+        } message: { plan in
+            Text(confirmationMessage(for: plan))
         }
     }
 
@@ -47,10 +81,12 @@ struct NukePreviewView: View {
                 axis: .vertical
             )
             .lineLimit(1...3)
+            .disabled(isExecuting)
             .onChange(of: config.query) { _, value in
                 if value.count > NukePreviewPlanner.maximumQueryLength {
                     config.query = String(value.prefix(NukePreviewPlanner.maximumQueryLength))
                 }
+                clearExecutionOutcome()
             }
         }
     }
@@ -64,8 +100,12 @@ struct NukePreviewView: View {
                     .tag(NukeMatchMode.regex)
             }
             .pickerStyle(.segmented)
+            .disabled(isExecuting)
+            .onChange(of: config.matchMode) { _, _ in clearExecutionOutcome() }
 
             Toggle(localized("nuke.case_sensitive"), isOn: $config.caseSensitive)
+                .disabled(isExecuting)
+                .onChange(of: config.caseSensitive) { _, _ in clearExecutionOutcome() }
 
             Picker(localized("nuke.time_window"), selection: $config.windowMilliseconds) {
                 ForEach(Self.windowPresets, id: \.self) { milliseconds in
@@ -74,6 +114,8 @@ struct NukePreviewView: View {
                 }
             }
             .pickerStyle(.segmented)
+            .disabled(isExecuting)
+            .onChange(of: config.windowMilliseconds) { _, _ in clearExecutionOutcome() }
         } header: {
             Text(localized("nuke.matching"))
         }
@@ -82,8 +124,14 @@ struct NukePreviewView: View {
     private var exclusionsSection: some View {
         Section {
             Toggle(localized("nuke.exclude_broadcaster"), isOn: $config.excludeBroadcaster)
+                .disabled(isExecuting)
+                .onChange(of: config.excludeBroadcaster) { _, _ in clearExecutionOutcome() }
             Toggle(localized("nuke.exclude_moderators"), isOn: $config.excludeModerators)
+                .disabled(isExecuting)
+                .onChange(of: config.excludeModerators) { _, _ in clearExecutionOutcome() }
             Toggle(localized("nuke.exclude_vips"), isOn: $config.excludeVIPs)
+                .disabled(isExecuting)
+                .onChange(of: config.excludeVIPs) { _, _ in clearExecutionOutcome() }
         } header: {
             Text(localized("nuke.exclusions"))
         }
@@ -165,11 +213,82 @@ struct NukePreviewView: View {
         }
     }
 
-    private var previewOnlySection: some View {
+    private var executionSection: some View {
         Section {
-            Label(localized("nuke.preview_only"), systemImage: "shield.lefthalf.filled")
+            if canExecute {
+                Button(role: .destructive) {
+                    prepareExecution()
+                } label: {
+                    if isExecuting {
+                        HStack(spacing: 8) {
+                            ProgressView()
+                            Text(executionLocalized("nuke.execution.running"))
+                        }
+                    } else {
+                        Label(
+                            executionLocalized("nuke.execution.action"),
+                            systemImage: "person.crop.circle.badge.clock"
+                        )
+                    }
+                }
+                .disabled(!canPrepareExecution)
+
+                Text(executionLocalized("nuke.execution.warning"))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            } else {
+                Label(
+                    executionLocalized("nuke.execution.unavailable"),
+                    systemImage: "lock.shield"
+                )
                 .font(.footnote)
                 .foregroundStyle(.secondary)
+            }
+        } header: {
+            Text(executionLocalized("nuke.execution.section"))
+        }
+    }
+
+    @ViewBuilder
+    private var executionResultSection: some View {
+        if let result = executionResult {
+            Section {
+                LabeledContent(
+                    executionLocalized("nuke.execution.attempted"),
+                    value: result.attemptedUsers.formatted()
+                )
+                LabeledContent(
+                    executionLocalized("nuke.execution.succeeded"),
+                    value: result.succeededUsers.formatted()
+                )
+                LabeledContent(
+                    executionLocalized("nuke.execution.failed_count"),
+                    value: result.failedUsers.formatted()
+                )
+
+                ForEach(result.failures.prefix(5)) { failure in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(
+                            failure.user.userDisplayName.isEmpty
+                                ? failure.user.userLogin
+                                : failure.user.userDisplayName
+                        )
+                        .font(.subheadline.weight(.semibold))
+                        Text(failure.message)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            } header: {
+                Text(executionLocalized("nuke.execution.result"))
+            }
+        } else if let executionError {
+            Section {
+                Text(executionError)
+                    .foregroundStyle(.red)
+            } header: {
+                Text(executionLocalized("nuke.execution.result"))
+            }
         }
     }
 
@@ -177,8 +296,88 @@ struct NukePreviewView: View {
         NukePreviewPlanner.build(
             messages: messages,
             config: config,
-            nowMilliseconds: Int64(Date().timeIntervalSince1970 * 1_000)
+            nowMilliseconds: Self.nowMilliseconds()
         )
+    }
+
+    private var canPrepareExecution: Bool {
+        guard canExecute,
+              !isExecuting,
+              let count = previewResult.preview?.matchedUserCount else {
+            return false
+        }
+        return count > 0 && count <= NukeExecutionPolicy().maxTargetUsers
+    }
+
+    private func prepareExecution() {
+        executionResult = nil
+        executionError = nil
+        let previewedAt = Self.nowMilliseconds()
+        let result = NukePreviewPlanner.build(
+            messages: messages,
+            config: config,
+            nowMilliseconds: previewedAt
+        )
+        guard case let .success(preview) = result else {
+            return
+        }
+
+        let limit = NukeExecutionPolicy().maxTargetUsers
+        guard preview.matchedUserCount <= limit else {
+            executionError = String(
+                format: executionLocalized("nuke.execution.too_many"),
+                limit
+            )
+            return
+        }
+
+        guard case let .success(plan) = NukeExecutionPlanner.freeze(
+            config: config,
+            preview: preview,
+            previewedAtMilliseconds: previewedAt
+        ) else {
+            executionError = executionLocalized("nuke.execution.freeze_failed")
+            return
+        }
+
+        pendingPlan = plan
+        showsExecutionConfirmation = true
+    }
+
+    @MainActor
+    private func performExecution(_ plan: NukeExecutionPlan) async {
+        isExecuting = true
+        executionResult = nil
+        executionError = nil
+        defer {
+            isExecuting = false
+            pendingPlan = nil
+        }
+
+        do {
+            executionResult = try await execute(plan)
+        } catch is CancellationError {
+            return
+        } catch {
+            executionError = executionLocalized("nuke.execution.failed")
+                + "\n"
+                + String(describing: error)
+        }
+    }
+
+    private func confirmationMessage(for plan: NukeExecutionPlan) -> String {
+        String(
+            format: executionLocalized("nuke.execution.confirm.message"),
+            plan.targetUserCount,
+            NukeExecutionPolicy().timeoutSeconds / 60
+        )
+    }
+
+    private func clearExecutionOutcome() {
+        guard !isExecuting else { return }
+        executionResult = nil
+        executionError = nil
+        pendingPlan = nil
     }
 
     private func errorMessage(_ error: NukePreviewError) -> String {
@@ -194,6 +393,14 @@ struct NukePreviewView: View {
 
     private func localized(_ key: String.LocalizationValue) -> String {
         String(localized: key, table: "Moderation")
+    }
+
+    private func executionLocalized(_ key: String.LocalizationValue) -> String {
+        String(localized: key, table: "ModerationExecution")
+    }
+
+    private static func nowMilliseconds() -> Int64 {
+        Int64(Date().timeIntervalSince1970 * 1_000)
     }
 
     private static let windowPresets: [Int64] = [10_000, 30_000, 60_000]

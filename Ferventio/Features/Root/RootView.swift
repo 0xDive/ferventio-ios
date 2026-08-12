@@ -73,8 +73,12 @@ struct RootView: View {
                 assets: environment.chatAssetStore,
                 historyPager: environment.chatHistoryPager,
                 repeatCollapseEnabled: environment.chatPresentationPreferences.repeatCollapseEnabled,
+                canExecuteNuke: environment.canExecuteNuke,
                 loadUserProfile: { author in
                     await environment.loadUserProfile(for: author)
+                },
+                executeNuke: { plan in
+                    try await environment.executeNuke(plan: plan)
                 }
             ) {
                 await environment.connectChat()

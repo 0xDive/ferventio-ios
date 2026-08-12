@@ -1,0 +1,102 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "nuke.execution.action" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Apply 10-minute timeouts" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Выдать таймауты на 10 минут" } }
+      }
+    },
+    "nuke.execution.attempted" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Attempted users" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Обработано пользователей" } }
+      }
+    },
+    "nuke.execution.cancel" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Cancel" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Отмена" } }
+      }
+    },
+    "nuke.execution.confirm.action" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Apply timeouts" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Выдать таймауты" } }
+      }
+    },
+    "nuke.execution.confirm.message" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Timeout %1$d users for %2$d minutes? Only the users frozen by this preview will be affected." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Выдать таймаут %1$d пользователям на %2$d минут? Будут затронуты только пользователи, зафиксированные этим предпросмотром." } }
+      }
+    },
+    "nuke.execution.confirm.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Confirm mass moderation" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Подтвердить массовую модерацию" } }
+      }
+    },
+    "nuke.execution.failed" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Nuke execution failed." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Не удалось выполнить Nuke." } }
+      }
+    },
+    "nuke.execution.failed_count" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Failed users" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Ошибок" } }
+      }
+    },
+    "nuke.execution.freeze_failed" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The current preview could not be frozen safely. Review the targets and try again." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Не удалось безопасно зафиксировать текущий предпросмотр. Проверьте цели и повторите попытку." } }
+      }
+    },
+    "nuke.execution.result" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Execution result" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Результат выполнения" } }
+      }
+    },
+    "nuke.execution.running" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Applying timeouts…" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Выдача таймаутов…" } }
+      }
+    },
+    "nuke.execution.section" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Moderation action" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Действие модерации" } }
+      }
+    },
+    "nuke.execution.succeeded" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Succeeded users" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Успешно" } }
+      }
+    },
+    "nuke.execution.too_many" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The preview exceeds the safety limit of %d users." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Предпросмотр превышает безопасный лимит в %d пользователей." } }
+      }
+    },
+    "nuke.execution.unavailable" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Execution requires a connected channel and the moderator:manage:banned_users scope." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Для выполнения нужен подключённый канал и scope moderator:manage:banned_users." } }
+      }
+    },
+    "nuke.execution.warning" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "This is destructive. The app freezes the exact preview target set, limits execution to 100 users, and spaces Twitch requests before applying timeouts." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Это необратимое moderation-действие. Приложение фиксирует точный набор целей из предпросмотра, ограничивает выполнение 100 пользователями и делает паузы между запросами к Twitch." } }
+      }
+    }
+  },
+  "version" : "1.0"
+}
