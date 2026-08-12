@@ -22,6 +22,16 @@ public struct PersistenceDatabaseStats: Equatable, Sendable {
     }
 }
 
+public struct ChatHistoryCursor: Equatable, Sendable {
+    public let timestampMilliseconds: Int64
+    public let messageID: String
+
+    public init(timestampMilliseconds: Int64, messageID: String) {
+        self.timestampMilliseconds = timestampMilliseconds
+        self.messageID = messageID
+    }
+}
+
 public actor PersistenceStore {
     public enum Error: Swift.Error, Equatable {
         case invalidLimit
@@ -79,23 +89,33 @@ public actor PersistenceStore {
     public func recentMessages(
         channelID: String,
         limit: Int,
-        beforeTimestampMilliseconds: Int64? = nil
+        before cursor: ChatHistoryCursor? = nil
     ) throws -> [ChatMessage] {
         guard limit > 0 else {
             throw Error.invalidLimit
         }
         let rows: [Row] = try databaseQueue.read { db in
-            if let beforeTimestampMilliseconds {
+            if let cursor {
                 return try Row.fetchAll(
                     db,
                     sql: """
                     SELECT payload
                     FROM chat_messages
-                    WHERE channel_id = ? AND timestamp_ms < ?
+                    WHERE channel_id = ?
+                      AND (
+                          timestamp_ms < ?
+                          OR (timestamp_ms = ? AND message_id < ?)
+                      )
                     ORDER BY timestamp_ms DESC, message_id DESC
                     LIMIT ?
                     """,
-                    arguments: [channelID, beforeTimestampMilliseconds, limit]
+                    arguments: [
+                        channelID,
+                        cursor.timestampMilliseconds,
+                        cursor.timestampMilliseconds,
+                        cursor.messageID,
+                        limit,
+                    ]
                 )
             }
             return try Row.fetchAll(
