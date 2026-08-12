@@ -196,6 +196,37 @@ final class AppEnvironment {
         )
     }
 
+    func canTimeoutUser(_ author: ChatAuthor) -> Bool {
+        guard canExecuteNuke,
+              let session,
+              !author.id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              author.id != session.userID else {
+            return false
+        }
+        let badgeSetIDs = Set(author.badges.map(\.setID))
+        return badgeSetIDs.isDisjoint(with: Self.protectedModerationBadgeSetIDs)
+    }
+
+    func timeoutUserFromCard(_ author: ChatAuthor) async throws -> NukeExecutionResult {
+        guard canTimeoutUser(author) else {
+            throw NukeExecutionServiceError.missingTargetUserID
+        }
+        let user = NukeTargetUser(
+            userID: author.id,
+            userLogin: author.login,
+            userDisplayName: author.displayName
+        )
+        let plan = NukeExecutionPlan(
+            query: "manual:user-card-timeout",
+            matchMode: .plainText,
+            caseSensitive: false,
+            previewedAtMilliseconds: Int64(Date().timeIntervalSince1970 * 1_000),
+            targetUsers: [user],
+            targetMessageIDs: []
+        )
+        return try await executeNuke(plan: plan)
+    }
+
     func chatHistoryPreferences() -> ChatHistoryPreferences {
         chatHistoryPreferencesStore.load()
     }
@@ -251,4 +282,10 @@ final class AppEnvironment {
         chatHistoryPager.reset(channelID: nil)
         chatAssetStore.reset()
     }
+
+    private static let protectedModerationBadgeSetIDs: Set<String> = [
+        "broadcaster",
+        "moderator",
+        "vip",
+    ]
 }

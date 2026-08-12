@@ -9,6 +9,8 @@ struct ChatView: View {
     let repeatCollapseEnabled: Bool
     let canExecuteNuke: Bool
     let loadUserProfile: (ChatAuthor) async -> TwitchUser?
+    let canTimeoutUser: (ChatAuthor) -> Bool
+    let timeoutUser: (ChatAuthor) async throws -> NukeExecutionResult
     let executeNuke: (NukeExecutionPlan) async throws -> NukeExecutionResult
     let connect: () async -> Void
 
@@ -41,8 +43,12 @@ struct ChatView: View {
                 UserCardView(
                     author: author,
                     messages: displayedMessages,
+                    canTimeout: canTimeoutUser(author),
                     loadProfile: {
                         await loadUserProfile(author)
+                    },
+                    timeoutUser: {
+                        try await timeoutUser(author)
                     }
                 )
             }

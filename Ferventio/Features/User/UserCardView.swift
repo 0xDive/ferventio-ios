@@ -5,11 +5,17 @@ import SwiftUI
 struct UserCardView: View {
     let author: ChatAuthor
     let messages: [ChatMessage]
+    let canTimeout: Bool
     let loadProfile: () async -> TwitchUser?
+    let timeoutUser: () async throws -> NukeExecutionResult
 
     @Environment(\.dismiss) private var dismiss
     @State private var profile: TwitchUser?
     @State private var didFinishProfileLoad = false
+    @State private var showsTimeoutConfirmation = false
+    @State private var isTimingOut = false
+    @State private var timeoutResult: NukeExecutionResult?
+    @State private var timeoutError: String?
 
     var body: some View {
         NavigationStack {
@@ -18,6 +24,7 @@ struct UserCardView: View {
                 rolesAndBadgesSection
                 twitchProfileSection
                 chatContextSection
+                moderationSection
                 recentMessagesSection
             }
             .navigationTitle(Text(localized("user_card.title")))
@@ -27,6 +34,7 @@ struct UserCardView: View {
                     Button(localized("user_card.done")) {
                         dismiss()
                     }
+                    .disabled(isTimingOut)
                 }
             }
             .task(id: author.id + ":" + author.login) {
@@ -34,6 +42,26 @@ struct UserCardView: View {
                 profile = await loadProfile()
                 didFinishProfileLoad = true
             }
+        }
+        .interactiveDismissDisabled(isTimingOut)
+        .alert(
+            moderationLocalized("user_card.moderation.timeout.confirm.title"),
+            isPresented: $showsTimeoutConfirmation
+        ) {
+            Button(moderationLocalized("user_card.moderation.cancel"), role: .cancel) {}
+            Button(
+                moderationLocalized("user_card.moderation.timeout.confirm.action"),
+                role: .destructive
+            ) {
+                Task { await performTimeout() }
+            }
+        } message: {
+            Text(
+                String(
+                    format: moderationLocalized("user_card.moderation.timeout.confirm.message"),
+                    profile?.displayName ?? author.displayName
+                )
+            )
         }
     }
 
@@ -142,6 +170,61 @@ struct UserCardView: View {
         }
     }
 
+    private var moderationSection: some View {
+        Section {
+            if canTimeout {
+                Button(role: .destructive) {
+                    timeoutResult = nil
+                    timeoutError = nil
+                    showsTimeoutConfirmation = true
+                } label: {
+                    if isTimingOut {
+                        HStack(spacing: 8) {
+                            ProgressView()
+                            Text(moderationLocalized("user_card.moderation.timeout.running"))
+                        }
+                    } else {
+                        Label(
+                            moderationLocalized("user_card.moderation.timeout.action"),
+                            systemImage: "timer"
+                        )
+                    }
+                }
+                .disabled(isTimingOut)
+            } else {
+                Label(
+                    moderationLocalized("user_card.moderation.unavailable"),
+                    systemImage: "lock.shield"
+                )
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            }
+
+            if let result = timeoutResult {
+                if result.completed {
+                    Label(
+                        moderationLocalized("user_card.moderation.timeout.success"),
+                        systemImage: "checkmark.circle.fill"
+                    )
+                    .foregroundStyle(.secondary)
+                } else {
+                    Text(
+                        result.failures.first?.message
+                            ?? moderationLocalized("user_card.moderation.timeout.failed")
+                    )
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+                }
+            } else if let timeoutError {
+                Text(timeoutError)
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+            }
+        } header: {
+            Text(moderationLocalized("user_card.moderation.section"))
+        }
+    }
+
     @ViewBuilder
     private var recentMessagesSection: some View {
         if !recentMessages.isEmpty {
@@ -183,6 +266,24 @@ struct UserCardView: View {
                 .foregroundStyle(.secondary)
                 .frame(width: 64, height: 64)
                 .accessibilityHidden(true)
+        }
+    }
+
+    @MainActor
+    private func performTimeout() async {
+        isTimingOut = true
+        timeoutResult = nil
+        timeoutError = nil
+        defer { isTimingOut = false }
+
+        do {
+            timeoutResult = try await timeoutUser()
+        } catch is CancellationError {
+            return
+        } catch {
+            timeoutError = moderationLocalized("user_card.moderation.timeout.failed")
+                + "\n"
+                + String(describing: error)
         }
     }
 
@@ -229,5 +330,9 @@ struct UserCardView: View {
 
     private func localized(_ key: String.LocalizationValue) -> String {
         String(localized: key, table: "UserCard")
+    }
+
+    private func moderationLocalized(_ key: String.LocalizationValue) -> String {
+        String(localized: key, table: "UserCardModeration")
     }
 }

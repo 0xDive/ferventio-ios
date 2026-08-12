@@ -77,6 +77,12 @@ struct RootView: View {
                 loadUserProfile: { author in
                     await environment.loadUserProfile(for: author)
                 },
+                canTimeoutUser: { author in
+                    environment.canTimeoutUser(author)
+                },
+                timeoutUser: { author in
+                    try await environment.timeoutUserFromCard(author)
+                },
                 executeNuke: { plan in
                     try await environment.executeNuke(plan: plan)
                 }

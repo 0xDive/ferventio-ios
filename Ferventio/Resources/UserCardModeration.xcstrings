@@ -1,0 +1,66 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "user_card.moderation.cancel" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Cancel" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Отмена" } }
+      }
+    },
+    "user_card.moderation.section" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Moderation" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Модерация" } }
+      }
+    },
+    "user_card.moderation.timeout.action" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Timeout for 10 minutes" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Таймаут на 10 минут" } }
+      }
+    },
+    "user_card.moderation.timeout.confirm.action" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Apply timeout" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Выдать таймаут" } }
+      }
+    },
+    "user_card.moderation.timeout.confirm.message" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Timeout %@ for 10 minutes?" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Выдать %@ таймаут на 10 минут?" } }
+      }
+    },
+    "user_card.moderation.timeout.confirm.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Confirm timeout" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Подтвердить таймаут" } }
+      }
+    },
+    "user_card.moderation.timeout.failed" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The timeout could not be applied." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Не удалось выдать таймаут." } }
+      }
+    },
+    "user_card.moderation.timeout.running" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Applying timeout…" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Выдача таймаута…" } }
+      }
+    },
+    "user_card.moderation.timeout.success" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "10-minute timeout applied" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Таймаут на 10 минут выдан" } }
+      }
+    },
+    "user_card.moderation.unavailable" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Quick moderation is unavailable for this user or with the current Twitch permissions." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Быстрая модерация недоступна для этого пользователя или с текущими разрешениями Twitch." } }
+      }
+    }
+  },
+  "version" : "1.0"
+}
