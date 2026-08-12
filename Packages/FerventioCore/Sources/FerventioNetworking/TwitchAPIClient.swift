@@ -98,6 +98,21 @@ public struct TwitchAPIClient: Sendable {
         return user
     }
 
+    public func getUserByID(clientID: String, token: String, userID: String) async throws -> TwitchUser {
+        let normalized = userID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else {
+            throw Error.userNotFound
+        }
+        guard let user = try await getUsers(
+            clientID: clientID,
+            token: token,
+            queryItems: [URLQueryItem(name: "id", value: normalized)]
+        ).first else {
+            throw Error.userNotFound
+        }
+        return user
+    }
+
     public func getUserByLogin(clientID: String, token: String, login: String) async throws -> TwitchUser {
         let normalized = normalizeLogin(login)
         guard !normalized.isEmpty else {
