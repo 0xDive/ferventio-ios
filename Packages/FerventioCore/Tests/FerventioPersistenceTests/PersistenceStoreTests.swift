@@ -67,7 +67,7 @@ struct PersistenceStoreTests {
     }
 
     @Test
-    func recentMessagesCanPageBeforeTimestamp() async throws {
+    func recentMessagesCanPageBeforeCursor() async throws {
         let store = try PersistenceStore.inMemory()
         try await store.save((0..<6).map { index in
             makeMessage(
@@ -80,10 +80,70 @@ struct PersistenceStoreTests {
         let page = try await store.recentMessages(
             channelID: "channel",
             limit: 2,
-            beforeTimestampMilliseconds: 400
+            before: ChatHistoryCursor(
+                timestampMilliseconds: 400,
+                messageID: "message-4"
+            )
         )
 
         #expect(page.map(\.id) == ["message-2", "message-3"])
+    }
+
+    @Test
+    func historyCursorIsStableWhenMessagesShareTimestamp() async throws {
+        let store = try PersistenceStore.inMemory()
+        try await store.save([
+            makeMessage(id: "message-z", timestamp: 90, text: "older"),
+            makeMessage(id: "message-a", timestamp: 100, text: "same a"),
+            makeMessage(id: "message-b", timestamp: 100, text: "same b"),
+            makeMessage(id: "message-c", timestamp: 100, text: "same c"),
+        ])
+
+        let firstPage = try await store.recentMessages(channelID: "channel", limit: 2)
+        let secondPage = try await store.recentMessages(
+            channelID: "channel",
+            limit: 2,
+            before: ChatHistoryCursor(
+                timestampMilliseconds: firstPage[0].timestampMilliseconds,
+                messageID: firstPage[0].id
+            )
+        )
+
+        #expect(firstPage.map(\.id) == ["message-b", "message-c"])
+        #expect(secondPage.map(\.id) == ["message-z", "message-a"])
+        #expect(Set(firstPage.map(\.id)).isDisjoint(with: Set(secondPage.map(\.id))))
+    }
+
+    @Test
+    func secondHistoryPageIsStrictlyOlderThanFirstPage() async throws {
+        let store = try PersistenceStore.inMemory()
+        try await store.save((0..<8).map { index in
+            makeMessage(
+                id: String(format: "message-%02d", index),
+                timestamp: Int64(index / 2),
+                text: "Message \(index)"
+            )
+        })
+
+        let firstPage = try await store.recentMessages(channelID: "channel", limit: 3)
+        let cursorMessage = try #require(firstPage.first)
+        let secondPage = try await store.recentMessages(
+            channelID: "channel",
+            limit: 3,
+            before: ChatHistoryCursor(
+                timestampMilliseconds: cursorMessage.timestampMilliseconds,
+                messageID: cursorMessage.id
+            )
+        )
+        let newestOlder = try #require(secondPage.last)
+
+        #expect(
+            newestOlder.timestampMilliseconds < cursorMessage.timestampMilliseconds
+                || (
+                    newestOlder.timestampMilliseconds == cursorMessage.timestampMilliseconds
+                        && newestOlder.id < cursorMessage.id
+                )
+        )
     }
 
     @Test
