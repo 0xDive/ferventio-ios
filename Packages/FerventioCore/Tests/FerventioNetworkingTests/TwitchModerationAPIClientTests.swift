@@ -18,7 +18,8 @@ struct TwitchModerationAPIClientTests {
         #expect(request.httpMethod == "POST")
         #expect(request.url?.host == "api.twitch.tv")
         #expect(request.url?.path == "/helix/moderation/bans")
-        let components = try #require(URLComponents(url: try #require(request.url), resolvingAgainstBaseURL: false))
+        let url = try #require(request.url)
+        let components = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false))
         let query = Dictionary(uniqueKeysWithValues: (components.queryItems ?? []).compactMap { item in
             item.value.map { (item.name, $0) }
         })
