@@ -44,8 +44,7 @@ struct ChatHistorySettingsView: View {
                     if localHistoryEnabled {
                         Stepper(
                             value: $localHistoryLimit,
-                            in: ChatHistoryPreferences.minimumLocalHistoryLimit
-                                ...ChatHistoryPreferences.maximumLocalHistoryLimit,
+                            in: ChatHistoryPreferences.minimumLocalHistoryLimit...ChatHistoryPreferences.maximumLocalHistoryLimit,
                             step: 100
                         ) {
                             settingValueRow(
