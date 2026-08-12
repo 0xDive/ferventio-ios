@@ -4,7 +4,10 @@ import SwiftUI
 struct ChatView: View {
     @Bindable var store: ChatStore
     @Bindable var assets: ChatAssetStore
+    @Bindable var historyPager: ChatHistoryPager
     let connect: () async -> Void
+
+    @State private var hasPositionedInitialFeed = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -13,6 +16,10 @@ struct ChatView: View {
             messageFeed
             Divider()
             composerBar
+        }
+        .onChange(of: store.channel?.id, initial: true) { _, channelID in
+            historyPager.reset(channelID: channelID)
+            hasPositionedInitialFeed = false
         }
         .alert(
             String(localized: "chat.error.title"),
@@ -65,7 +72,7 @@ struct ChatView: View {
 
     @ViewBuilder
     private var messageFeed: some View {
-        if store.messages.isEmpty {
+        if displayedMessages.isEmpty {
             ContentUnavailableView(
                 String(localized: emptyTitleKey),
                 systemImage: emptySystemImage,
@@ -76,7 +83,11 @@ struct ChatView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 8) {
-                        ForEach(store.messages) { message in
+                        if historyPager.canLoadOlderHistory {
+                            historyPagingSentinel(proxy: proxy)
+                        }
+
+                        ForEach(displayedMessages) { message in
                             ChatMessageRow(
                                 message: message,
                                 badgeAssets: assets.badgeAssets
@@ -89,12 +100,50 @@ struct ChatView: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 10)
                 }
-                .onChange(of: store.messages.last?.id) { _, messageID in
+                .onChange(of: displayedMessages.last?.id, initial: true) { _, messageID in
                     guard let messageID else { return }
                     proxy.scrollTo(messageID, anchor: .bottom)
+                    hasPositionedInitialFeed = true
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private func historyPagingSentinel(proxy: ScrollViewProxy) -> some View {
+        HStack {
+            Spacer(minLength: 0)
+            if historyPager.isLoadingOlderHistory {
+                ProgressView()
+                    .controlSize(.small)
+            } else {
+                Color.clear
+                    .frame(width: 1, height: 1)
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(height: 20)
+        .onAppear {
+            guard hasPositionedInitialFeed else {
+                return
+            }
+            Task {
+                let visibleMessages = displayedMessages
+                let anchorID = await historyPager.loadOlderHistory(
+                    before: visibleMessages.first,
+                    excluding: Set(store.messages.map(\.id))
+                )
+                guard let anchorID else {
+                    return
+                }
+                await Task.yield()
+                proxy.scrollTo(anchorID, anchor: .top)
+            }
+        }
+    }
+
+    private var displayedMessages: [ChatMessage] {
+        historyPager.mergedMessages(with: store.messages)
     }
 
     private var composerBar: some View {
