@@ -4,6 +4,11 @@ import FerventioPersistence
 
 protocol ChatHistoryPersisting: Sendable {
     func recentMessages(channelID: String, limit: Int) async -> [ChatMessage]
+    func olderMessages(
+        channelID: String,
+        before cursor: ChatHistoryCursor,
+        limit: Int
+    ) async -> [ChatMessage]
     func enqueue(_ message: ChatMessage) async
     func maintain(
         channelID: String,
@@ -12,6 +17,16 @@ protocol ChatHistoryPersisting: Sendable {
         maxDatabaseSizeMB: Int
     ) async
     func flush() async
+}
+
+extension ChatHistoryPersisting {
+    func olderMessages(
+        channelID: String,
+        before cursor: ChatHistoryCursor,
+        limit: Int
+    ) async -> [ChatMessage] {
+        []
+    }
 }
 
 actor PersistenceChatHistory: ChatHistoryPersisting {
@@ -27,6 +42,18 @@ actor PersistenceChatHistory: ChatHistoryPersisting {
 
     func recentMessages(channelID: String, limit: Int) async -> [ChatMessage] {
         (try? await store.recentMessages(channelID: channelID, limit: limit)) ?? []
+    }
+
+    func olderMessages(
+        channelID: String,
+        before cursor: ChatHistoryCursor,
+        limit: Int
+    ) async -> [ChatMessage] {
+        (try? await store.recentMessages(
+            channelID: channelID,
+            limit: limit,
+            before: cursor
+        )) ?? []
     }
 
     func enqueue(_ message: ChatMessage) async {
@@ -87,6 +114,14 @@ actor PersistenceChatHistory: ChatHistoryPersisting {
 
 struct NoopChatHistory: ChatHistoryPersisting {
     func recentMessages(channelID: String, limit: Int) async -> [ChatMessage] {
+        []
+    }
+
+    func olderMessages(
+        channelID: String,
+        before cursor: ChatHistoryCursor,
+        limit: Int
+    ) async -> [ChatMessage] {
         []
     }
 
