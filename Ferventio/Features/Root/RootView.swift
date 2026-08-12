@@ -68,7 +68,8 @@ struct RootView: View {
             Divider()
             ChatView(
                 store: environment.chatStore,
-                assets: environment.chatAssetStore
+                assets: environment.chatAssetStore,
+                historyPager: environment.chatHistoryPager
             ) {
                 await environment.connectChat()
             }
