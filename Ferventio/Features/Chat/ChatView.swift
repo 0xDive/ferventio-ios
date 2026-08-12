@@ -87,14 +87,8 @@ struct ChatView: View {
                             historyPagingSentinel(proxy: proxy)
                         }
 
-                        ForEach(displayedMessages) { message in
-                            ChatMessageRow(
-                                message: message,
-                                badgeAssets: assets.badgeAssets
-                            ) {
-                                store.beginReply(to: message)
-                            }
-                            .id(message.id)
+                        ForEach(displayedGroups) { group in
+                            repeatGroup(group)
                         }
                     }
                     .padding(.horizontal, 12)
@@ -106,6 +100,25 @@ struct ChatView: View {
                     hasPositionedInitialFeed = true
                 }
             }
+        }
+    }
+
+    private func repeatGroup(_ group: ChatRepeatGroup) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(group.messages.dropLast(), id: \.id) { message in
+                Color.clear
+                    .frame(height: 0)
+                    .id(message.id)
+            }
+
+            ChatMessageRow(
+                message: group.representative,
+                badgeAssets: assets.badgeAssets,
+                repeatCount: group.repeatCount
+            ) {
+                store.beginReply(to: group.representative)
+            }
+            .id(group.representative.id)
         }
     }
 
@@ -144,6 +157,10 @@ struct ChatView: View {
 
     private var displayedMessages: [ChatMessage] {
         historyPager.mergedMessages(with: store.messages)
+    }
+
+    private var displayedGroups: [ChatRepeatGroup] {
+        ChatRepeatCollapsePlanner.collapse(displayedMessages)
     }
 
     private var composerBar: some View {
