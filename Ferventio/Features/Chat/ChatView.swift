@@ -113,10 +113,21 @@ struct ChatView: View {
 
             ChatMessageRow(
                 message: group.representative,
-                badgeAssets: assets.badgeAssets,
-                repeatCount: group.repeatCount
+                badgeAssets: assets.badgeAssets
             ) {
                 store.beginReply(to: group.representative)
+            }
+            .overlay(alignment: .topTrailing) {
+                if group.repeatCount > 1 {
+                    Text("×\(group.repeatCount)")
+                        .font(.caption2.weight(.bold))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(.thinMaterial, in: Capsule())
+                        .accessibilityLabel(Text("×\(group.repeatCount)"))
+                }
             }
             .id(group.representative.id)
         }
