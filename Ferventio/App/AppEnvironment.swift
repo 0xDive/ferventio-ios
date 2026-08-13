@@ -14,6 +14,7 @@ final class AppEnvironment {
     let chatStore: ChatStore
     let chatAssetStore: ChatAssetStore
     let chatHistoryPager: ChatHistoryPager
+    let interactiveMutationStore: InteractiveChatMutationStore
     var chatPresentationPreferences: ChatPresentationPreferences
 
     @ObservationIgnored private let authService: any Authenticating
@@ -31,6 +32,7 @@ final class AppEnvironment {
         userProfileLoader: (any UserProfileLoading)? = nil,
         nukeExecutor: (any NukeExecuting)? = nil,
         interactiveChatHydrator: (any InteractiveChatHydrating)? = nil,
+        interactiveMutationStore: InteractiveChatMutationStore? = nil,
         chatStore: ChatStore? = nil,
         chatAssetStore: ChatAssetStore? = nil,
         chatHistoryPager: ChatHistoryPager? = nil,
@@ -42,6 +44,7 @@ final class AppEnvironment {
         self.userProfileLoader = userProfileLoader ?? TwitchUserProfileLoader()
         self.nukeExecutor = nukeExecutor ?? TwitchNukeExecutionService()
         self.interactiveChatHydrator = interactiveChatHydrator ?? TwitchInteractiveChatHydrator()
+        self.interactiveMutationStore = interactiveMutationStore ?? InteractiveChatMutationStore()
         let preferencesStore = chatHistoryPreferencesStore ?? ChatHistoryPreferencesStore()
         let preferences = preferencesStore.load()
         self.chatHistoryPreferencesStore = preferencesStore
@@ -77,6 +80,14 @@ final class AppEnvironment {
             return false
         }
         return grant.accessLease.session.scopes.contains(TwitchNukeExecutionService.requiredScope)
+    }
+
+    var canManagePolls: Bool {
+        canManageInteractive(scope: "channel:manage:polls")
+    }
+
+    var canManagePredictions: Bool {
+        canManageInteractive(scope: "channel:manage:predictions")
     }
 
     func start() async {
@@ -124,6 +135,7 @@ final class AppEnvironment {
         await chatStore.disconnect()
         chatHistoryPager.reset(channelID: nil)
         chatAssetStore.reset()
+        interactiveMutationStore.clear()
         do {
             try await authService.signOut()
             clearSession()
@@ -147,6 +159,7 @@ final class AppEnvironment {
         do {
             let channel = try await twitchBootstrap.resolveChannel(login: login, for: grant)
             chatAssetStore.reset()
+            interactiveMutationStore.clear()
             await chatStore.connect(
                 channel: channel,
                 lease: grant.accessLease,
@@ -178,6 +191,79 @@ final class AppEnvironment {
         } catch {
             chatStore.failChannelResolution()
         }
+    }
+
+    func createPoll(_ draft: PollDraft) async -> Bool {
+        guard let grant = authenticationGrant,
+              let channel = chatStore.channel else {
+            return false
+        }
+        let success = await interactiveMutationStore.createPoll(
+            channel: channel,
+            lease: grant.accessLease,
+            draft: draft
+        )
+        if success {
+            await refreshInteractiveOverlays(channel: channel, grant: grant)
+        }
+        return success
+    }
+
+    func endPoll(_ poll: PollOverlay, status: PollEndStatus) async -> Bool {
+        guard let grant = authenticationGrant,
+              let channel = chatStore.channel,
+              poll.channelID == channel.id else {
+            return false
+        }
+        let success = await interactiveMutationStore.endPoll(
+            channel: channel,
+            lease: grant.accessLease,
+            pollID: poll.id,
+            status: status
+        )
+        if success {
+            await refreshInteractiveOverlays(channel: channel, grant: grant)
+        }
+        return success
+    }
+
+    func createPrediction(_ draft: PredictionDraft) async -> Bool {
+        guard let grant = authenticationGrant,
+              let channel = chatStore.channel else {
+            return false
+        }
+        let success = await interactiveMutationStore.createPrediction(
+            channel: channel,
+            lease: grant.accessLease,
+            draft: draft
+        )
+        if success {
+            await refreshInteractiveOverlays(channel: channel, grant: grant)
+        }
+        return success
+    }
+
+    func endPrediction(
+        _ prediction: PredictionOverlay,
+        status: PredictionEndStatus,
+        winningOutcomeID: String? = nil
+    ) async -> Bool {
+        guard let grant = authenticationGrant,
+              let channel = chatStore.channel,
+              prediction.channelID == channel.id else {
+            return false
+        }
+        let success = await interactiveMutationStore.endPrediction(
+            channel: channel,
+            lease: grant.accessLease,
+            predictionID: prediction.id,
+            status: status,
+            winningOutcomeID: winningOutcomeID
+        )
+        if success {
+            await refreshInteractiveOverlays(channel: channel, grant: grant)
+        }
+        return success
     }
 
     func loadUserProfile(for author: ChatAuthor) async -> TwitchUser? {
@@ -283,12 +369,36 @@ final class AppEnvironment {
         currentUser = try? await twitchBootstrap.loadCurrentUser(for: grant)
     }
 
+    private func refreshInteractiveOverlays(
+        channel: ChatChannel,
+        grant: AuthenticationGrant
+    ) async {
+        let snapshot = await interactiveChatHydrator.load(
+            channel: channel,
+            lease: grant.accessLease
+        )
+        guard chatStore.channel?.id == channel.id else {
+            return
+        }
+        chatStore.applyHydratedInteractiveOverlays(snapshot)
+    }
+
+    private func canManageInteractive(scope: String) -> Bool {
+        guard let grant = authenticationGrant,
+              let channel = chatStore.channel,
+              channel.id == grant.accessLease.session.userID else {
+            return false
+        }
+        return grant.accessLease.session.scopes.contains(scope)
+    }
+
     private func clearSession() {
         authenticationGrant = nil
         session = nil
         currentUser = nil
         chatHistoryPager.reset(channelID: nil)
         chatAssetStore.reset()
+        interactiveMutationStore.clear()
     }
 
     private static let protectedModerationBadgeSetIDs: Set<String> = [
