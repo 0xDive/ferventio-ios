@@ -1,0 +1,20 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "interactive.poll" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Poll" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Опрос" } } } },
+    "interactive.prediction" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Prediction" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Предсказание" } } } },
+    "interactive.total_votes" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Total votes" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Всего голосов" } } } },
+    "interactive.winner" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Winning outcome" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Победивший исход" } } } },
+    "interactive.status.active" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Active" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Активно" } } } },
+    "interactive.status.completed" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Completed" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Завершено" } } } },
+    "interactive.status.terminated" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Terminated" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Остановлено" } } } },
+    "interactive.status.archived" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Archived" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "В архиве" } } } },
+    "interactive.status.moderated" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Moderated" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Скрыто модерацией" } } } },
+    "interactive.status.invalid" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Invalid" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Недействительно" } } } },
+    "interactive.status.locked" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Locked" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Закрыто" } } } },
+    "interactive.status.resolved" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Resolved" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Результат определён" } } } },
+    "interactive.status.canceled" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Canceled" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Отменено" } } } },
+    "interactive.status.unknown" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Unknown" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Неизвестно" } } } }
+  },
+  "version" : "1.0"
+}
