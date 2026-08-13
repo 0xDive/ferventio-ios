@@ -20,6 +20,13 @@ struct ChatView: View {
     var body: some View {
         VStack(spacing: 0) {
             channelBar
+            if currentPoll != nil || currentPrediction != nil {
+                Divider()
+                InteractiveChatOverlayView(
+                    poll: currentPoll,
+                    prediction: currentPrediction
+                )
+            }
             Divider()
             messageFeed
             Divider()
@@ -214,6 +221,20 @@ struct ChatView: View {
             displayedMessages,
             config: ChatRepeatCollapseConfig(enabled: repeatCollapseEnabled)
         )
+    }
+
+    private var currentPoll: PollOverlay? {
+        guard let channelID = store.channel?.id else {
+            return nil
+        }
+        return store.interactiveOverlayState.pollsByChannel[channelID]
+    }
+
+    private var currentPrediction: PredictionOverlay? {
+        guard let channelID = store.channel?.id else {
+            return nil
+        }
+        return store.interactiveOverlayState.predictionsByChannel[channelID]
     }
 
     private var composerBar: some View {
