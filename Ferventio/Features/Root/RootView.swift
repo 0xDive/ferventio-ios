@@ -4,6 +4,7 @@ import SwiftUI
 struct RootView: View {
     @Bindable var environment: AppEnvironment
     @State private var showsChatHistorySettings = false
+    @State private var showsInteractiveManagement = false
 
     var body: some View {
         NavigationStack {
@@ -36,6 +37,25 @@ struct RootView: View {
                 _ = await environment.updateChatHistoryPreferences(preferences)
                 _ = environment.updateChatPresentationPreferences(presentationPreferences)
             }
+        }
+        .sheet(isPresented: $showsInteractiveManagement) {
+            InteractiveChatManagementView(
+                poll: currentPoll,
+                prediction: currentPrediction,
+                canManagePolls: environment.canManagePolls,
+                canManagePredictions: environment.canManagePredictions,
+                mutationStore: environment.interactiveMutationStore,
+                endPoll: { poll, status in
+                    await environment.endPoll(poll, status: status)
+                },
+                endPrediction: { prediction, status, winningOutcomeID in
+                    await environment.endPrediction(
+                        prediction,
+                        status: status,
+                        winningOutcomeID: winningOutcomeID
+                    )
+                }
+            )
         }
     }
 
@@ -92,6 +112,15 @@ struct RootView: View {
         }
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
+                if canOpenInteractiveManagement {
+                    Button {
+                        showsInteractiveManagement = true
+                    } label: {
+                        Image(systemName: "chart.bar.xaxis")
+                            .accessibilityLabel(Text(interactiveLocalized("interactive.manage.title")))
+                    }
+                }
+
                 Button {
                     showsChatHistorySettings = true
                 } label: {
@@ -147,7 +176,30 @@ struct RootView: View {
         }
     }
 
+    private var currentPoll: PollOverlay? {
+        guard let channelID = environment.chatStore.channel?.id else {
+            return nil
+        }
+        return environment.chatStore.interactiveOverlayState.pollsByChannel[channelID]
+    }
+
+    private var currentPrediction: PredictionOverlay? {
+        guard let channelID = environment.chatStore.channel?.id else {
+            return nil
+        }
+        return environment.chatStore.interactiveOverlayState.predictionsByChannel[channelID]
+    }
+
+    private var canOpenInteractiveManagement: Bool {
+        (currentPoll != nil && environment.canManagePolls)
+            || (currentPrediction != nil && environment.canManagePredictions)
+    }
+
     private func settingsLocalized(_ key: String.LocalizationValue) -> String {
         String(localized: key, table: "Settings")
+    }
+
+    private func interactiveLocalized(_ key: String.LocalizationValue) -> String {
+        String(localized: key, table: "InteractiveChat")
     }
 }
