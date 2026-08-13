@@ -45,6 +45,12 @@ struct RootView: View {
                 canManagePolls: environment.canManagePolls,
                 canManagePredictions: environment.canManagePredictions,
                 mutationStore: environment.interactiveMutationStore,
+                createPoll: { draft in
+                    await environment.createPoll(draft)
+                },
+                createPrediction: { draft in
+                    await environment.createPrediction(draft)
+                },
                 endPoll: { poll, status in
                     await environment.endPoll(poll, status: status)
                 },
@@ -191,8 +197,7 @@ struct RootView: View {
     }
 
     private var canOpenInteractiveManagement: Bool {
-        (currentPoll != nil && environment.canManagePolls)
-            || (currentPrediction != nil && environment.canManagePredictions)
+        environment.canManagePolls || environment.canManagePredictions
     }
 
     private func settingsLocalized(_ key: String.LocalizationValue) -> String {
