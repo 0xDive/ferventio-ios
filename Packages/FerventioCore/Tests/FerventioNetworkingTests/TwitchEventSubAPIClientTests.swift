@@ -65,6 +65,31 @@ struct TwitchEventSubAPIClientTests {
     }
 
     @Test
+    func gatesInteractiveTypesByReadOrManageScopes() {
+        #expect(InteractiveEventSubSubscriptionType.enabledTypes(for: []) == [])
+        #expect(
+            InteractiveEventSubSubscriptionType.enabledTypes(
+                for: ["channel:manage:polls"]
+            ) == [.pollBegin, .pollProgress, .pollEnd]
+        )
+        #expect(
+            InteractiveEventSubSubscriptionType.enabledTypes(
+                for: ["CHANNEL:READ:PREDICTIONS"]
+            ) == [
+                .predictionBegin,
+                .predictionProgress,
+                .predictionLock,
+                .predictionEnd,
+            ]
+        )
+        #expect(
+            InteractiveEventSubSubscriptionType.enabledTypes(
+                for: ["channel:read:polls", "channel:manage:predictions"]
+            ) == InteractiveEventSubSubscriptionType.allCases
+        )
+    }
+
+    @Test
     func rejectsMissingWebSocketSessionID() {
         #expect(throws: TwitchEventSubAPIClient.Error.invalidArgument("sessionID")) {
             try TwitchEventSubAPIClient.makeChatMessageSubscriptionRequest(
