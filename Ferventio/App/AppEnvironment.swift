@@ -20,6 +20,7 @@ final class AppEnvironment {
     @ObservationIgnored private let twitchBootstrap: any TwitchBootstrapping
     @ObservationIgnored private let userProfileLoader: any UserProfileLoading
     @ObservationIgnored private let nukeExecutor: any NukeExecuting
+    @ObservationIgnored private let interactiveChatHydrator: any InteractiveChatHydrating
     @ObservationIgnored private let chatHistoryPreferencesStore: ChatHistoryPreferencesStore
     @ObservationIgnored private let chatPresentationPreferencesStore: ChatPresentationPreferencesStore
     @ObservationIgnored private var authenticationGrant: AuthenticationGrant?
@@ -29,6 +30,7 @@ final class AppEnvironment {
         twitchBootstrap: (any TwitchBootstrapping)? = nil,
         userProfileLoader: (any UserProfileLoading)? = nil,
         nukeExecutor: (any NukeExecuting)? = nil,
+        interactiveChatHydrator: (any InteractiveChatHydrating)? = nil,
         chatStore: ChatStore? = nil,
         chatAssetStore: ChatAssetStore? = nil,
         chatHistoryPager: ChatHistoryPager? = nil,
@@ -39,6 +41,7 @@ final class AppEnvironment {
         self.twitchBootstrap = twitchBootstrap ?? TwitchBootstrapService()
         self.userProfileLoader = userProfileLoader ?? TwitchUserProfileLoader()
         self.nukeExecutor = nukeExecutor ?? TwitchNukeExecutionService()
+        self.interactiveChatHydrator = interactiveChatHydrator ?? TwitchInteractiveChatHydrator()
         let preferencesStore = chatHistoryPreferencesStore ?? ChatHistoryPreferencesStore()
         let preferences = preferencesStore.load()
         self.chatHistoryPreferencesStore = preferencesStore
@@ -161,12 +164,17 @@ final class AppEnvironment {
             async let thirdPartyEmotes: Void = chatAssetStore.loadThirdPartyEmotes(
                 twitchUserID: channel.id
             )
-            _ = await (badges, thirdPartyEmotes)
+            async let interactiveSnapshot = interactiveChatHydrator.load(
+                channel: channel,
+                lease: grant.accessLease
+            )
+            let (_, _, snapshot) = await (badges, thirdPartyEmotes, interactiveSnapshot)
 
             guard chatStore.channel?.id == channel.id else {
                 return
             }
             chatStore.setThirdPartyEmoteCatalog(chatAssetStore.thirdPartyEmoteCatalog)
+            chatStore.applyHydratedInteractiveOverlays(snapshot)
         } catch {
             chatStore.failChannelResolution()
         }
