@@ -43,6 +43,28 @@ public enum InteractiveEventSubSubscriptionType: String, CaseIterable, Equatable
             false
         }
     }
+
+    public static func enabledTypes(for scopes: Set<String>) -> [Self] {
+        let scopes = Set(scopes.map { $0.lowercased() })
+        let canReadPolls = scopes.contains("channel:read:polls")
+            || scopes.contains("channel:manage:polls")
+        let canReadPredictions = scopes.contains("channel:read:predictions")
+            || scopes.contains("channel:manage:predictions")
+
+        var types: [Self] = []
+        if canReadPolls {
+            types.append(contentsOf: [.pollBegin, .pollProgress, .pollEnd])
+        }
+        if canReadPredictions {
+            types.append(contentsOf: [
+                .predictionBegin,
+                .predictionProgress,
+                .predictionLock,
+                .predictionEnd,
+            ])
+        }
+        return types
+    }
 }
 
 public struct TwitchEventSubAPIClient: Sendable {
