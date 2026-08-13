@@ -14,7 +14,17 @@
     "interactive.status.locked" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Locked" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Закрыто" } } } },
     "interactive.status.resolved" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Resolved" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Результат определён" } } } },
     "interactive.status.canceled" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Canceled" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Отменено" } } } },
-    "interactive.status.unknown" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Unknown" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Неизвестно" } } } }
+    "interactive.status.unknown" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Unknown" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Неизвестно" } } } },
+    "interactive.manage.title" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Polls & Predictions" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Опросы и предсказания" } } } },
+    "interactive.manage.terminate" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "End now" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Завершить сейчас" } } } },
+    "interactive.manage.archive" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Archive" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Архивировать" } } } },
+    "interactive.manage.lock" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Lock" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Закрыть приём" } } } },
+    "interactive.manage.cancel" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Cancel" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Отменить" } } } },
+    "interactive.manage.winner" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Winning outcome" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Победивший исход" } } } },
+    "interactive.manage.resolve" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Resolve" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Определить результат" } } } },
+    "interactive.manage.applying" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Applying change…" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Применение изменения…" } } } },
+    "interactive.manage.failed" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Twitch could not apply the change." } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Twitch не удалось применить изменение." } } } },
+    "interactive.manage.done" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Done" } }, "ru" : { "stringUnit" : { "state" : "translated", "value" : "Готово" } } } }
   },
   "version" : "1.0"
 }
