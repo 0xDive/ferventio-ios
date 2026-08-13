@@ -1,4 +1,5 @@
 import FerventioDomain
+import FerventioNetworking
 import Testing
 @testable import Ferventio
 
