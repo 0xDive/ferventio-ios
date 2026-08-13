@@ -11,6 +11,8 @@ public struct EventSubEnvelope: Equatable, Sendable {
     public let subscriptionType: String?
     public let revocationStatus: String?
     public let chatMessage: ChatMessage?
+    public let poll: PollOverlay?
+    public let prediction: PredictionOverlay?
 
     public init(
         messageType: String,
@@ -21,7 +23,9 @@ public struct EventSubEnvelope: Equatable, Sendable {
         keepaliveTimeoutSeconds: Int? = nil,
         subscriptionType: String? = nil,
         revocationStatus: String? = nil,
-        chatMessage: ChatMessage? = nil
+        chatMessage: ChatMessage? = nil,
+        poll: PollOverlay? = nil,
+        prediction: PredictionOverlay? = nil
     ) {
         self.messageType = messageType
         self.messageID = messageID
@@ -32,6 +36,8 @@ public struct EventSubEnvelope: Equatable, Sendable {
         self.subscriptionType = subscriptionType
         self.revocationStatus = revocationStatus
         self.chatMessage = chatMessage
+        self.poll = poll
+        self.prediction = prediction
     }
 }
 
@@ -80,23 +86,47 @@ public enum EventSubEnvelopeParser {
             let subscription = object(payload["subscription"])
             let subscriptionType = string(subscription["type"])
             let event = object(payload["event"])
-            let chatMessage: ChatMessage?
-            if subscriptionType == "channel.chat.message" {
+            var chatMessage: ChatMessage?
+            var poll: PollOverlay?
+            var prediction: PredictionOverlay?
+
+            switch subscriptionType {
+            case "channel.chat.message":
                 chatMessage = try parseChatMessage(
                     event,
                     timestamp: timestamp ?? "",
                     eventSubMessageID: messageID,
                     now: now
                 )
-            } else {
-                chatMessage = nil
+
+            case "channel.poll.begin", "channel.poll.progress", "channel.poll.end":
+                poll = try parsePoll(
+                    event,
+                    subscriptionType: subscriptionType ?? "",
+                    timestamp: timestamp,
+                    now: now
+                )
+
+            case "channel.prediction.begin", "channel.prediction.progress", "channel.prediction.lock", "channel.prediction.end":
+                prediction = try parsePrediction(
+                    event,
+                    subscriptionType: subscriptionType ?? "",
+                    timestamp: timestamp,
+                    now: now
+                )
+
+            default:
+                break
             }
+
             return EventSubEnvelope(
                 messageType: messageType,
                 messageID: messageID,
                 messageTimestamp: timestamp,
                 subscriptionType: subscriptionType,
-                chatMessage: chatMessage
+                chatMessage: chatMessage,
+                poll: poll,
+                prediction: prediction
             )
 
         case "revocation":
@@ -211,6 +241,113 @@ public enum EventSubEnvelopeParser {
         )
     }
 
+    private static func parsePoll(
+        _ event: [String: Any],
+        subscriptionType: String,
+        timestamp: String?,
+        now: Date
+    ) throws -> PollOverlay {
+        guard let id = nonEmptyString(event["id"]) else {
+            throw Error.missingField("id")
+        }
+        guard let channelID = nonEmptyString(event["broadcaster_user_id"]) else {
+            throw Error.missingField("broadcaster_user_id")
+        }
+        guard let startedAt = nonEmptyString(event["started_at"]) else {
+            throw Error.missingField("started_at")
+        }
+
+        let choices = array(event["choices"]).compactMap { raw -> PollChoice? in
+            guard let choice = raw as? [String: Any],
+                  let choiceID = nonEmptyString(choice["id"]) else {
+                return nil
+            }
+            return PollChoice(
+                id: choiceID,
+                title: string(choice["title"]) ?? "",
+                votes: integer(choice["votes"]) ?? 0,
+                channelPointsVotes: integer(choice["channel_points_votes"]) ?? 0,
+                bitsVotes: integer(choice["bits_votes"]) ?? 0
+            )
+        }
+        let channelPointsVoting = object(event["channel_points_voting"])
+        let bitsVoting = object(event["bits_voting"])
+        let status: PollStatus = subscriptionType == "channel.poll.end"
+            ? PollStatus(twitchValue: string(event["status"]))
+            : .active
+
+        return PollOverlay(
+            id: id,
+            channelID: channelID,
+            title: string(event["title"]) ?? "",
+            choices: choices,
+            status: status,
+            startedAtMilliseconds: epochMilliseconds(startedAt, fallback: now),
+            endsAtMilliseconds: optionalEpochMilliseconds(string(event["ends_at"])),
+            endedAtMilliseconds: optionalEpochMilliseconds(string(event["ended_at"])),
+            channelPointsVotingEnabled: boolean(channelPointsVoting["is_enabled"]) ?? false,
+            channelPointsPerVote: integer(channelPointsVoting["amount_per_vote"]) ?? 0,
+            bitsVotingEnabled: boolean(bitsVoting["is_enabled"]) ?? false,
+            bitsPerVote: integer(bitsVoting["amount_per_vote"]) ?? 0,
+            updatedAtMilliseconds: epochMilliseconds(timestamp ?? "", fallback: now)
+        )
+    }
+
+    private static func parsePrediction(
+        _ event: [String: Any],
+        subscriptionType: String,
+        timestamp: String?,
+        now: Date
+    ) throws -> PredictionOverlay {
+        guard let id = nonEmptyString(event["id"]) else {
+            throw Error.missingField("id")
+        }
+        guard let channelID = nonEmptyString(event["broadcaster_user_id"]) else {
+            throw Error.missingField("broadcaster_user_id")
+        }
+        guard let startedAt = nonEmptyString(event["started_at"]) else {
+            throw Error.missingField("started_at")
+        }
+
+        let outcomes = array(event["outcomes"]).compactMap { raw -> PredictionOutcome? in
+            guard let outcome = raw as? [String: Any],
+                  let outcomeID = nonEmptyString(outcome["id"]) else {
+                return nil
+            }
+            return PredictionOutcome(
+                id: outcomeID,
+                title: string(outcome["title"]) ?? "",
+                users: integer(outcome["users"]) ?? 0,
+                channelPoints: integer64(outcome["channel_points"]) ?? 0,
+                color: PredictionOutcomeColor(twitchValue: string(outcome["color"]))
+            )
+        }
+
+        let status: PredictionStatus
+        switch subscriptionType {
+        case "channel.prediction.lock":
+            status = .locked
+        case "channel.prediction.end":
+            status = PredictionStatus(twitchValue: string(event["status"]))
+        default:
+            status = .active
+        }
+
+        return PredictionOverlay(
+            id: id,
+            channelID: channelID,
+            title: string(event["title"]) ?? "",
+            outcomes: outcomes,
+            status: status,
+            startedAtMilliseconds: epochMilliseconds(startedAt, fallback: now),
+            locksAtMilliseconds: optionalEpochMilliseconds(string(event["locks_at"])),
+            lockedAtMilliseconds: optionalEpochMilliseconds(string(event["locked_at"])),
+            endedAtMilliseconds: optionalEpochMilliseconds(string(event["ended_at"])),
+            winningOutcomeID: nonEmptyString(event["winning_outcome_id"]),
+            updatedAtMilliseconds: epochMilliseconds(timestamp ?? "", fallback: now)
+        )
+    }
+
     private static func parseReply(_ reply: [String: Any]?) -> ReplyContext? {
         guard let reply,
               let parentMessageID = nonEmptyString(reply["parent_message_id"]) else {
@@ -298,12 +435,26 @@ public enum EventSubEnvelopeParser {
     }
 
     private static func epochMilliseconds(_ raw: String, fallback: Date) -> Int64 {
+        parseDate(raw).map {
+            Int64(($0.timeIntervalSince1970 * 1_000).rounded(.towardZero))
+        } ?? Int64((fallback.timeIntervalSince1970 * 1_000).rounded(.towardZero))
+    }
+
+    private static func optionalEpochMilliseconds(_ raw: String?) -> Int64? {
+        guard let raw = raw?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !raw.isEmpty,
+              let date = parseDate(raw) else {
+            return nil
+        }
+        return Int64((date.timeIntervalSince1970 * 1_000).rounded(.towardZero))
+    }
+
+    private static func parseDate(_ raw: String) -> Date? {
         let fractional = ISO8601DateFormatter()
         fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let standard = ISO8601DateFormatter()
         standard.formatOptions = [.withInternetDateTime]
-        let date = fractional.date(from: raw) ?? standard.date(from: raw) ?? fallback
-        return Int64((date.timeIntervalSince1970 * 1_000).rounded(.towardZero))
+        return fractional.date(from: raw) ?? standard.date(from: raw)
     }
 
     private static func object(_ value: Any?) -> [String: Any] {
@@ -338,6 +489,22 @@ public enum EventSubEnvelopeParser {
         }
         if let value = value as? String {
             return Int(value)
+        }
+        return nil
+    }
+
+    private static func integer64(_ value: Any?) -> Int64? {
+        if let value = value as? Int64 {
+            return value
+        }
+        if let value = value as? Int {
+            return Int64(value)
+        }
+        if let value = value as? NSNumber {
+            return value.int64Value
+        }
+        if let value = value as? String {
+            return Int64(value)
         }
         return nil
     }

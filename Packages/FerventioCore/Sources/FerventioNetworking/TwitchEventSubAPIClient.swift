@@ -26,6 +26,25 @@ public struct EventSubSubscription: Equatable, Sendable, Identifiable {
     }
 }
 
+public enum InteractiveEventSubSubscriptionType: String, CaseIterable, Equatable, Sendable {
+    case pollBegin = "channel.poll.begin"
+    case pollProgress = "channel.poll.progress"
+    case pollEnd = "channel.poll.end"
+    case predictionBegin = "channel.prediction.begin"
+    case predictionProgress = "channel.prediction.progress"
+    case predictionLock = "channel.prediction.lock"
+    case predictionEnd = "channel.prediction.end"
+
+    public var isPoll: Bool {
+        switch self {
+        case .pollBegin, .pollProgress, .pollEnd:
+            true
+        case .predictionBegin, .predictionProgress, .predictionLock, .predictionEnd:
+            false
+        }
+    }
+}
+
 public struct TwitchEventSubAPIClient: Sendable {
     public enum Error: Swift.Error, Equatable {
         case invalidResponse
@@ -43,7 +62,7 @@ public struct TwitchEventSubAPIClient: Sendable {
 
         struct Condition: Encodable {
             let broadcasterUserID: String
-            let userID: String
+            let userID: String?
 
             enum CodingKeys: String, CodingKey {
                 case broadcasterUserID = "broadcaster_user_id"
@@ -109,6 +128,105 @@ public struct TwitchEventSubAPIClient: Sendable {
             broadcasterID: broadcasterID,
             userID: userID
         )
+        return try await createSubscription(request)
+    }
+
+    public func createInteractiveSubscription(
+        clientID: String,
+        accessToken: String,
+        sessionID: String,
+        broadcasterID: String,
+        type: InteractiveEventSubSubscriptionType
+    ) async throws -> EventSubSubscription {
+        let request = try Self.makeInteractiveSubscriptionRequest(
+            clientID: clientID,
+            accessToken: accessToken,
+            sessionID: sessionID,
+            broadcasterID: broadcasterID,
+            type: type
+        )
+        return try await createSubscription(request)
+    }
+
+    static func makeChatMessageSubscriptionRequest(
+        clientID: String,
+        accessToken: String,
+        sessionID: String,
+        broadcasterID: String,
+        userID: String
+    ) throws -> URLRequest {
+        try makeSubscriptionRequest(
+            clientID: clientID,
+            accessToken: accessToken,
+            sessionID: sessionID,
+            broadcasterID: broadcasterID,
+            userID: userID,
+            type: "channel.chat.message",
+            version: "1"
+        )
+    }
+
+    static func makeInteractiveSubscriptionRequest(
+        clientID: String,
+        accessToken: String,
+        sessionID: String,
+        broadcasterID: String,
+        type: InteractiveEventSubSubscriptionType
+    ) throws -> URLRequest {
+        try makeSubscriptionRequest(
+            clientID: clientID,
+            accessToken: accessToken,
+            sessionID: sessionID,
+            broadcasterID: broadcasterID,
+            userID: nil,
+            type: type.rawValue,
+            version: "1"
+        )
+    }
+
+    private static func makeSubscriptionRequest(
+        clientID: String,
+        accessToken: String,
+        sessionID: String,
+        broadcasterID: String,
+        userID: String?,
+        type: String,
+        version: String
+    ) throws -> URLRequest {
+        let clientID = try requireNonEmpty(clientID, name: "clientID")
+        let accessToken = try requireNonEmpty(accessToken, name: "accessToken")
+        let sessionID = try requireNonEmpty(sessionID, name: "sessionID")
+        let broadcasterID = try requireNonEmpty(broadcasterID, name: "broadcasterID")
+        let type = try requireNonEmpty(type, name: "type")
+        let version = try requireNonEmpty(version, name: "version")
+        let userID = try userID.map { try requireNonEmpty($0, name: "userID") }
+
+        var request = URLRequest(url: URL(string: "https://api.twitch.tv/helix/eventsub/subscriptions")!)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue(clientID, forHTTPHeaderField: "Client-Id")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.timeoutInterval = 20
+        request.httpBody = try JSONEncoder().encode(
+            CreateSubscriptionRequest(
+                type: type,
+                version: version,
+                condition: .init(
+                    broadcasterUserID: broadcasterID,
+                    userID: userID
+                ),
+                transport: .init(
+                    method: "websocket",
+                    sessionID: sessionID
+                )
+            )
+        )
+        return request
+    }
+
+    private func createSubscription(_ request: URLRequest) async throws -> EventSubSubscription {
         let response: CreateSubscriptionResponse = try await perform(request)
         guard let subscription = response.data.first else {
             throw Error.missingSubscription
@@ -121,44 +239,6 @@ public struct TwitchEventSubAPIClient: Sendable {
             cost: subscription.cost,
             sessionID: subscription.transport?.sessionID
         )
-    }
-
-    static func makeChatMessageSubscriptionRequest(
-        clientID: String,
-        accessToken: String,
-        sessionID: String,
-        broadcasterID: String,
-        userID: String
-    ) throws -> URLRequest {
-        let clientID = try requireNonEmpty(clientID, name: "clientID")
-        let accessToken = try requireNonEmpty(accessToken, name: "accessToken")
-        let sessionID = try requireNonEmpty(sessionID, name: "sessionID")
-        let broadcasterID = try requireNonEmpty(broadcasterID, name: "broadcasterID")
-        let userID = try requireNonEmpty(userID, name: "userID")
-
-        var request = URLRequest(url: URL(string: "https://api.twitch.tv/helix/eventsub/subscriptions")!)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
-        request.setValue(clientID, forHTTPHeaderField: "Client-Id")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.cachePolicy = .reloadIgnoringLocalCacheData
-        request.timeoutInterval = 20
-        request.httpBody = try JSONEncoder().encode(
-            CreateSubscriptionRequest(
-                type: "channel.chat.message",
-                version: "1",
-                condition: .init(
-                    broadcasterUserID: broadcasterID,
-                    userID: userID
-                ),
-                transport: .init(
-                    method: "websocket",
-                    sessionID: sessionID
-                )
-            )
-        )
-        return request
     }
 
     private static func requireNonEmpty(_ value: String, name: String) throws -> String {
