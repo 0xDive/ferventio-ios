@@ -44,6 +44,7 @@ final class ChatStore {
     var composerText = ""
     private(set) var channel: ChatChannel?
     private(set) var messages: [ChatMessage] = []
+    private(set) var interactiveOverlayState = InteractiveChatOverlayState()
     private(set) var connectionState: ConnectionState = .disconnected
     private(set) var isSending = false
     private(set) var replyTarget: ChatMessage?
@@ -125,6 +126,7 @@ final class ChatStore {
         await history.flush()
 
         self.channel = channel
+        interactiveOverlayState = InteractiveChatOverlayState()
         activeLease = lease
         localAuthor = ChatAuthor(
             id: lease.session.userID,
@@ -254,6 +256,7 @@ final class ChatStore {
         localAuthor = nil
         thirdPartyEmoteCatalog = ThirdPartyEmoteCatalog(emotes: [])
         messages.removeAll(keepingCapacity: false)
+        interactiveOverlayState = InteractiveChatOverlayState()
         composerText = ""
         replyTarget = nil
         isSending = false
@@ -438,12 +441,39 @@ final class ChatStore {
             }
             applyServerMessage(message)
 
+        case let .poll(poll):
+            guard poll.channelID == channel?.id else {
+                return
+            }
+            interactiveOverlayState = InteractiveChatOverlayReducer.reduce(
+                state: interactiveOverlayState,
+                event: .pollSnapshot(poll)
+            )
+
+        case let .prediction(prediction):
+            guard prediction.channelID == channel?.id else {
+                return
+            }
+            interactiveOverlayState = InteractiveChatOverlayReducer.reduce(
+                state: interactiveOverlayState,
+                event: .predictionSnapshot(prediction)
+            )
+
         case .reconnected:
             connectionState = .connected
 
-        case .revocation:
-            connectionState = .failed
-            showsConnectionError = true
+        case let .revocation(subscriptionType, _):
+            if subscriptionType == "channel.chat.message" {
+                connectionState = .failed
+                showsConnectionError = true
+            } else if subscriptionType.hasPrefix("channel.poll.")
+                        || subscriptionType.hasPrefix("channel.prediction."),
+                      let channelID = channel?.id {
+                interactiveOverlayState = InteractiveChatOverlayReducer.reduce(
+                    state: interactiveOverlayState,
+                    event: .clearChannel(channelID)
+                )
+            }
         }
     }
 
