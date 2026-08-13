@@ -4,6 +4,8 @@ import FerventioDomain
 public actor TwitchEventSubChatClient {
     public enum Event: Equatable, Sendable {
         case message(ChatMessage)
+        case poll(PollOverlay)
+        case prediction(PredictionOverlay)
         case reconnected(sessionID: String)
         case revocation(subscriptionType: String, status: String)
     }
@@ -40,7 +42,6 @@ public actor TwitchEventSubChatClient {
     ) async throws -> EventSubSubscription {
         seenMessageIDs.removeAll(keepingCapacity: true)
         messageIDOrder.removeAll(keepingCapacity: true)
-
         do {
             let established = try await establishFreshConnection(channel: channel, lease: lease)
             activeChannel = channel
@@ -87,6 +88,12 @@ public actor TwitchEventSubChatClient {
             case "notification":
                 if let message = envelope.chatMessage {
                     return .message(message)
+                }
+                if let poll = envelope.poll {
+                    return .poll(poll)
+                }
+                if let prediction = envelope.prediction {
+                    return .prediction(prediction)
                 }
 
             case "session_reconnect":
@@ -167,10 +174,39 @@ public actor TwitchEventSubChatClient {
                 await webSocket.close()
                 throw Error.subscriptionSessionMismatch
             }
+
+            try await subscribeToInteractiveEvents(
+                channel: channel,
+                lease: lease,
+                sessionID: sessionID
+            )
             return (subscription, sessionID)
         } catch {
             await webSocket.close()
             throw error
+        }
+    }
+
+    private func subscribeToInteractiveEvents(
+        channel: ChatChannel,
+        lease: TwitchAccessLease,
+        sessionID: String
+    ) async throws {
+        for type in InteractiveEventSubSubscriptionType.enabledTypes(for: lease.session.scopes) {
+            try Task.checkCancellation()
+            do {
+                _ = try await subscriptions.createInteractiveSubscription(
+                    clientID: lease.session.clientID,
+                    accessToken: lease.accessToken,
+                    sessionID: sessionID,
+                    broadcasterID: channel.id,
+                    type: type
+                )
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                continue
+            }
         }
     }
 
