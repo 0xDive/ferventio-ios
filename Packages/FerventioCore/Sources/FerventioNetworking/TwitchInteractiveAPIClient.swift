@@ -254,6 +254,7 @@ public struct TwitchInteractiveAPIClient: Sendable {
         let endedAt = optionalEpochMilliseconds(prediction.endedAt)
         let lockedAt = optionalEpochMilliseconds(prediction.lockedAt)
         let locksAt = startedAt + Int64(max(0, prediction.predictionWindow)) * 1_000
+        let updatedAt = max(max(startedAt, lockedAt ?? startedAt), endedAt ?? startedAt)
         return PredictionOverlay(
             id: prediction.id,
             channelID: prediction.broadcasterID,
@@ -273,7 +274,7 @@ public struct TwitchInteractiveAPIClient: Sendable {
             lockedAtMilliseconds: lockedAt,
             endedAtMilliseconds: endedAt,
             winningOutcomeID: prediction.winningOutcomeID,
-            updatedAtMilliseconds: max(startedAt, lockedAt ?? startedAt, endedAt ?? startedAt)
+            updatedAtMilliseconds: updatedAt
         )
     }
 
