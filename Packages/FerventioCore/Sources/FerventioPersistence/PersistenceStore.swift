@@ -44,7 +44,7 @@ public actor PersistenceStore {
     public static let defaultSizeTrimBatch = 500
     public static let defaultMaximumSizeTrimPasses = 20
 
-    private let databaseQueue: DatabaseQueue
+    let databaseQueue: DatabaseQueue
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
 
@@ -281,6 +281,34 @@ public actor PersistenceStore {
                 sql: """
                 CREATE INDEX chat_messages_timestamp
                 ON chat_messages(timestamp_ms)
+                """
+            )
+        }
+        migrator.registerMigration("chat-composer-v1") { db in
+            try db.execute(
+                sql: """
+                CREATE TABLE chat_drafts (
+                    channel_id TEXT NOT NULL PRIMARY KEY,
+                    message_text TEXT NOT NULL,
+                    updated_at_ms INTEGER NOT NULL
+                )
+                """
+            )
+            try db.execute(
+                sql: """
+                CREATE TABLE chat_sent_history (
+                    channel_id TEXT NOT NULL,
+                    entry_id TEXT NOT NULL,
+                    sent_at_ms INTEGER NOT NULL,
+                    message_text TEXT NOT NULL,
+                    PRIMARY KEY (channel_id, entry_id)
+                )
+                """
+            )
+            try db.execute(
+                sql: """
+                CREATE INDEX chat_sent_history_channel_timestamp
+                ON chat_sent_history(channel_id, sent_at_ms DESC, entry_id DESC)
                 """
             )
         }
