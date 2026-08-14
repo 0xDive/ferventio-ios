@@ -33,14 +33,16 @@ struct ChatMessageRow: View {
                     }
                 }
 
-                Text(message.author.displayName)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(authorColor)
-                    .lineLimit(1)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        onOpenUserCard()
-                    }
+                Button(action: onOpenUserCard) {
+                    Text(message.author.displayName)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(authorColor)
+                        .lineLimit(1)
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint(
+                    Text(String(localized: "user_card.open", table: "UserCard"))
+                )
 
                 Spacer(minLength: 4)
 
