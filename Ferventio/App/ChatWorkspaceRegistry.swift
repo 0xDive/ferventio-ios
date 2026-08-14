@@ -67,7 +67,7 @@ final class ChatWorkspaceRegistryStore {
         case capacityReached
     }
 
-    static let maximumWorkspaces = 8
+    nonisolated static let maximumWorkspaces = 8
 
     private(set) var workspaces: [ChatWorkspace]
     private(set) var activeWorkspaceID: UUID?
