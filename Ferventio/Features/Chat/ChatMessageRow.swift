@@ -137,7 +137,7 @@ private struct BttvComposedEmoteView: View {
     let effects: Set<BttvModifierEffect>
 
     var body: some View {
-        if effects.contains(.party) || effects.contains(.shake) {
+        if effects.contains(.party) || FfzModifierVisualEffects.needsAnimation(effects) {
             TimelineView(.animation(minimumInterval: 1.0 / 20.0)) { context in
                 styledStack(at: context.date)
             }
@@ -154,12 +154,17 @@ private struct BttvComposedEmoteView: View {
         let noSpace = effects.contains(.noSpace)
         let cursed = effects.contains(.cursed)
         let party = effects.contains(.party)
-        let xScale: CGFloat = (wide ? 4 : 1) * (flipX ? -1 : 1)
-        let yScale: CGFloat = flipY ? -1 : 1
-        let rotation = rotationDegrees
-        let shake = shakeOffset(at: date)
+        let visualState = date.map {
+            FfzModifierVisualEffects.state(effects: effects, at: $0)
+        } ?? .identity
+        let xScale: CGFloat = (wide ? 4 : 1)
+            * (flipX ? -1 : 1)
+            * visualState.scaleX
+        let yScale: CGFloat = (flipY ? -1 : 1) * visualState.scaleY
+        let rotation = rotationDegrees + visualState.rotationDegrees
         let width: CGFloat = wide ? 112 : 28
         let layoutWidth = max(1, width - (noSpace ? 4 : 0))
+        let scaleAnchor: UnitPoint = visualState.usesBottomAnchor ? .bottom : .center
 
         return ZStack {
             ChatFragmentView(fragment: base)
@@ -167,16 +172,16 @@ private struct BttvComposedEmoteView: View {
                 ChatFragmentView(fragment: overlay)
             }
         }
-        .scaleEffect(x: xScale, y: yScale)
+        .scaleEffect(x: xScale, y: yScale, anchor: scaleAnchor)
         .rotationEffect(.degrees(rotation))
         .grayscale(cursed ? 1 : 0)
         .brightness(cursed ? -0.3 : 0)
         .contrast(cursed ? 2.5 : 1)
         .saturation(party ? 2.5 : 1)
-        .hueRotation(.degrees(partyHue(at: date)))
+        .hueRotation(.degrees(partyHue(at: date) + visualState.hueRotationDegrees))
         .offset(
-            x: shake.width - (noSpace ? 4 : 0),
-            y: shake.height
+            x: visualState.offsetX - (noSpace ? 4 : 0),
+            y: visualState.offsetY
         )
         .frame(width: layoutWidth, height: 28)
         .accessibilityElement(children: .combine)
@@ -200,26 +205,6 @@ private struct BttvComposedEmoteView: View {
         let cycle = date.timeIntervalSinceReferenceDate
             .truncatingRemainder(dividingBy: 1.5)
         return (cycle / 1.5) * 360
-    }
-
-    private func shakeOffset(at date: Date?) -> CGSize {
-        guard effects.contains(.shake), let date else {
-            return .zero
-        }
-        let frames: [CGSize] = [
-            CGSize(width: 0, height: 1),
-            CGSize(width: 2, height: 0),
-            CGSize(width: 1, height: -2),
-            CGSize(width: -2, height: 1),
-            CGSize(width: 0, height: -1),
-            CGSize(width: 2, height: 2),
-            CGSize(width: -1, height: -1),
-            CGSize(width: -2, height: 2),
-            CGSize(width: 2, height: 1),
-            CGSize(width: -1, height: -2),
-        ]
-        let step = Int((date.timeIntervalSinceReferenceDate / 0.05).rounded(.down))
-        return frames[((step % frames.count) + frames.count) % frames.count]
     }
 }
 
