@@ -239,7 +239,6 @@ struct ChatView: View {
                         .padding(.vertical, 5)
                 }
             }
-            .accessibilityAddTraits(isHighlighted ? .isSelected : [])
             .id(group.representative.id)
         }
     }
