@@ -148,21 +148,72 @@ struct UserCardView: View {
     }
 
     private var chatContextSection: some View {
-        Section {
+        let summary = activitySummary
+        return Section {
+            if let userID = nonEmpty(profile?.id ?? author.id) {
+                LabeledContent(localized("user_card.user_id")) {
+                    Text(userID)
+                        .font(.caption.monospaced())
+                        .textSelection(.enabled)
+                }
+            }
             LabeledContent(
                 localized("user_card.loaded_messages"),
-                value: matchingMessages.count.formatted()
+                value: summary.messageCount.formatted()
             )
-            if let first = matchingMessages.first {
+            if let first = summary.firstMessageTimestampMilliseconds {
                 LabeledContent(
                     localized("user_card.first_loaded_message"),
-                    value: formattedMessageTime(first.timestampMilliseconds)
+                    value: formattedMessageTime(first)
                 )
             }
-            if let last = matchingMessages.last, matchingMessages.count > 1 {
+            if let latest = summary.latestMessageTimestampMilliseconds,
+               latest != summary.firstMessageTimestampMilliseconds {
                 LabeledContent(
                     localized("user_card.latest_message"),
-                    value: formattedMessageTime(last.timestampMilliseconds)
+                    value: formattedMessageTime(latest)
+                )
+            }
+            if summary.deletedMessageCount > 0 {
+                LabeledContent(
+                    localized("user_card.deleted_messages"),
+                    value: summary.deletedMessageCount.formatted()
+                )
+            }
+            if summary.replyCount > 0 {
+                LabeledContent(
+                    localized("user_card.replies"),
+                    value: summary.replyCount.formatted()
+                )
+            }
+            if summary.actionCount > 0 {
+                LabeledContent(
+                    localized("user_card.actions"),
+                    value: summary.actionCount.formatted()
+                )
+            }
+            if summary.cheerCount > 0 {
+                LabeledContent(
+                    localized("user_card.cheers"),
+                    value: summary.cheerCount.formatted()
+                )
+            }
+            if summary.rewardCount > 0 {
+                LabeledContent(
+                    localized("user_card.rewards"),
+                    value: summary.rewardCount.formatted()
+                )
+            }
+            if summary.hasFirstMessage {
+                LabeledContent(
+                    localized("user_card.first_message_seen"),
+                    value: localized("user_card.yes")
+                )
+            }
+            if summary.hasReturningChatter {
+                LabeledContent(
+                    localized("user_card.returning_chatter_seen"),
+                    value: localized("user_card.yes")
                 )
             }
         } header: {
@@ -289,6 +340,10 @@ struct UserCardView: View {
 
     private var matchingMessages: [ChatMessage] {
         UserCardContext.messages(for: author, in: messages)
+    }
+
+    private var activitySummary: UserCardActivitySummary {
+        UserCardContext.activitySummary(for: author, in: messages)
     }
 
     private var recentMessages: [ChatMessage] {
