@@ -134,12 +134,14 @@ private struct ChatFragmentFlow: View {
 }
 
 private struct BttvComposedEmoteView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     let base: ChatFragment
     let overlays: [ChatFragment]
     let effects: Set<BttvModifierEffect>
 
     var body: some View {
-        if effects.contains(.party) || FfzModifierVisualEffects.needsAnimation(effects) {
+        if !reduceMotion && (effects.contains(.party) || FfzModifierVisualEffects.needsAnimation(effects)) {
             TimelineView(.animation(minimumInterval: 1.0 / 20.0)) { context in
                 styledStack(at: context.date)
             }
