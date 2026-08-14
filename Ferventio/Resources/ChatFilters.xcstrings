@@ -1,0 +1,162 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "action.hide" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Hide" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Скрывать" } }
+      }
+    },
+    "action.highlight" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Highlight" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Подсвечивать" } }
+      }
+    },
+    "action.section" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Action" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Действие" } }
+      }
+    },
+    "add" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Add rule" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Добавить правило" } }
+      }
+    },
+    "cancel" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Cancel" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Отмена" } }
+      }
+    },
+    "case_sensitive" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Case sensitive" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Учитывать регистр" } }
+      }
+    },
+    "editor.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Rule" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Правило" } }
+      }
+    },
+    "empty.message" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Add rules to hide noise or highlight messages and authors you care about." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Добавьте правила, чтобы скрывать шум или подсвечивать нужные сообщения и авторов." } }
+      }
+    },
+    "empty.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No rules" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Нет правил" } }
+      }
+    },
+    "feed.empty.message" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Messages are still kept in local history and remain available to moderation tools." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Сообщения остаются в локальной истории и доступны инструментам модерации." } }
+      }
+    },
+    "feed.empty.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No messages match your filters" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Нет сообщений по фильтрам" } }
+      }
+    },
+    "match.contains" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Contains" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Содержит" } }
+      }
+    },
+    "match.mode" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Match mode" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Режим совпадения" } }
+      }
+    },
+    "match.regex" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Regular expression" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Регулярное выражение" } }
+      }
+    },
+    "match.section" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Match" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Совпадение" } }
+      }
+    },
+    "query" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Text or pattern" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Текст или шаблон" } }
+      }
+    },
+    "rules.footer" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Rules are evaluated in presentation only. Hidden messages remain available to history and moderation tools." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Правила применяются только к отображению. Скрытые сообщения остаются в истории и доступны инструментам модерации." } }
+      }
+    },
+    "save" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Save" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Сохранить" } }
+      }
+    },
+    "settings.footer" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Hide matching messages or highlight matching messages and authors without changing stored chat history." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Скрывайте или подсвечивайте совпадения, не изменяя сохранённую историю чата." } }
+      }
+    },
+    "target.author" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Author" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Автор" } }
+      }
+    },
+    "target.message" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Message" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Сообщение" } }
+      }
+    },
+    "target.section" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Target" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Цель" } }
+      }
+    },
+    "title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Filters & Highlights" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Фильтры и подсветка" } }
+      }
+    },
+    "validation.empty" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Enter text or a pattern." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Введите текст или шаблон." } }
+      }
+    },
+    "validation.invalid_regex" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "This regular expression is invalid." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Некорректное регулярное выражение." } }
+      }
+    },
+    "validation.too_long" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Patterns may contain at most %d characters." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Шаблон может содержать не более %d символов." } }
+      }
+    }
+  },
+  "version" : "1.0"
+}

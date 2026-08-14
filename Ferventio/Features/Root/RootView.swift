@@ -272,6 +272,7 @@ struct RootView: View {
             composerStore: runtime.chatComposerStore,
             workspaceLogin: runtime.workspace.login,
             repeatCollapseEnabled: environment.chatPresentationPreferences.repeatCollapseEnabled,
+            presentationRules: environment.chatPresentationPreferences.rules,
             canExecuteNuke: environment.canExecuteNuke(in: runtime),
             loadUserProfile: { author in
                 await environment.loadUserProfile(for: author)

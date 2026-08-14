@@ -1,3 +1,4 @@
+import FerventioDomain
 import SwiftUI
 
 struct ChatHistorySettingsView: View {
@@ -5,6 +6,7 @@ struct ChatHistorySettingsView: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var repeatCollapseEnabled: Bool
+    @State private var presentationRules: [ChatPresentationRule]
     @State private var recentMessagesEnabled: Bool
     @State private var localHistoryEnabled: Bool
     @State private var localHistoryLimit: Int
@@ -21,6 +23,7 @@ struct ChatHistorySettingsView: View {
         _repeatCollapseEnabled = State(
             initialValue: presentationPreferences.repeatCollapseEnabled
         )
+        _presentationRules = State(initialValue: presentationPreferences.rules)
         _recentMessagesEnabled = State(initialValue: preferences.recentMessagesEnabled)
         _localHistoryEnabled = State(initialValue: preferences.localHistoryEnabled)
         _localHistoryLimit = State(initialValue: preferences.localHistoryLimit)
@@ -40,6 +43,25 @@ struct ChatHistorySettingsView: View {
                     Text(localized("chat.section"))
                 } footer: {
                     Text(localized("chat.repeat_collapse.footer"))
+                }
+
+                Section {
+                    NavigationLink {
+                        ChatPresentationRulesSettingsView(rules: $presentationRules)
+                    } label: {
+                        HStack {
+                            Label(
+                                filtersLocalized("title"),
+                                systemImage: "line.3.horizontal.decrease.circle"
+                            )
+                            Spacer(minLength: 12)
+                            Text(presentationRules.count.formatted())
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                        }
+                    }
+                } footer: {
+                    Text(filtersLocalized("settings.footer"))
                 }
 
                 Section {
@@ -138,7 +160,8 @@ struct ChatHistorySettingsView: View {
 
     private var currentPresentationPreferences: ChatPresentationPreferences {
         ChatPresentationPreferences(
-            repeatCollapseEnabled: repeatCollapseEnabled
+            repeatCollapseEnabled: repeatCollapseEnabled,
+            rules: presentationRules
         )
     }
 
@@ -154,5 +177,9 @@ struct ChatHistorySettingsView: View {
 
     private func localized(_ key: String.LocalizationValue) -> String {
         String(localized: key, table: "Settings")
+    }
+
+    private func filtersLocalized(_ key: String.LocalizationValue) -> String {
+        String(localized: key, table: "ChatFilters")
     }
 }

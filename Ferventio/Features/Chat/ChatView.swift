@@ -11,6 +11,7 @@ struct ChatView: View {
     let composerStore: ChatComposerStore
     let workspaceLogin: String?
     let repeatCollapseEnabled: Bool
+    let presentationRules: [ChatPresentationRule]
     let canExecuteNuke: Bool
     let loadUserProfile: (ChatAuthor) async -> TwitchUser?
     let canTimeoutUser: (ChatAuthor) -> Bool
@@ -66,7 +67,7 @@ struct ChatView: View {
             switch request.content {
             case let .nuke(query):
                 NukePreviewView(
-                    messages: displayedMessages,
+                    messages: canonicalDisplayedMessages,
                     initialQuery: query,
                     canExecute: canExecuteNuke,
                     execute: executeNuke
@@ -74,7 +75,7 @@ struct ChatView: View {
             case let .user(author):
                 UserCardView(
                     author: author,
-                    messages: displayedMessages,
+                    messages: canonicalDisplayedMessages,
                     canTimeout: canTimeoutUser(author),
                     loadProfile: {
                         await loadUserProfile(author)
@@ -143,11 +144,13 @@ struct ChatView: View {
 
     @ViewBuilder
     private var messageFeed: some View {
-        if displayedMessages.isEmpty {
+        if canonicalDisplayedMessages.isEmpty {
+            defaultEmptyFeed
+        } else if displayedMessages.isEmpty {
             ContentUnavailableView(
-                String(localized: emptyTitleKey),
-                systemImage: emptySystemImage,
-                description: Text(emptyMessageKey)
+                filtersLocalized("feed.empty.title"),
+                systemImage: "line.3.horizontal.decrease.circle",
+                description: Text(filtersLocalized("feed.empty.message"))
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
@@ -174,8 +177,21 @@ struct ChatView: View {
         }
     }
 
+    private var defaultEmptyFeed: some View {
+        ContentUnavailableView(
+            String(localized: emptyTitleKey),
+            systemImage: emptySystemImage,
+            description: Text(emptyMessageKey)
+        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
     private func repeatGroup(_ group: ChatRepeatGroup) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
+        let isHighlighted = group.messages.contains { message in
+            presentationProjection.isHighlighted(messageID: message.id)
+        }
+
+        return VStack(alignment: .leading, spacing: 0) {
             ForEach(group.messages.dropFirst(), id: \.id) { message in
                 Color.clear
                     .frame(height: 0)
@@ -207,6 +223,23 @@ struct ChatView: View {
                         .accessibilityLabel(Text("×\(group.repeatCount)"))
                 }
             }
+            .padding(.horizontal, isHighlighted ? 7 : 0)
+            .padding(.vertical, isHighlighted ? 5 : 0)
+            .background {
+                if isHighlighted {
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .fill(Color.accentColor.opacity(0.12))
+                }
+            }
+            .overlay(alignment: .leading) {
+                if isHighlighted {
+                    Capsule()
+                        .fill(Color.accentColor)
+                        .frame(width: 3)
+                        .padding(.vertical, 5)
+                }
+            }
+            .accessibilityAddTraits(isHighlighted ? .isSelected : [])
             .id(group.representative.id)
         }
     }
@@ -244,8 +277,19 @@ struct ChatView: View {
         }
     }
 
-    private var displayedMessages: [ChatMessage] {
+    private var canonicalDisplayedMessages: [ChatMessage] {
         historyPager.mergedMessages(with: store.messages)
+    }
+
+    private var presentationProjection: ChatPresentationRuleProjection {
+        ChatPresentationRuleEngine.project(
+            messages: canonicalDisplayedMessages,
+            rules: presentationRules
+        )
+    }
+
+    private var displayedMessages: [ChatMessage] {
+        presentationProjection.visibleMessages
     }
 
     private var displayedGroups: [ChatRepeatGroup] {
@@ -408,6 +452,10 @@ struct ChatView: View {
         case .disconnected, .connected:
             "bubble.left.and.bubble.right"
         }
+    }
+
+    private func filtersLocalized(_ key: String.LocalizationValue) -> String {
+        String(localized: key, table: "ChatFilters")
     }
 }
 

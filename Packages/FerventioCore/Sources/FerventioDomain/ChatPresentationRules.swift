@@ -1,16 +1,16 @@
 import Foundation
 
-public enum ChatPresentationRuleAction: String, Codable, CaseIterable, Equatable, Sendable {
+public enum ChatPresentationRuleAction: String, Codable, CaseIterable, Equatable, Hashable, Sendable {
     case hide
     case highlight
 }
 
-public enum ChatPresentationRuleTarget: String, Codable, CaseIterable, Equatable, Sendable {
+public enum ChatPresentationRuleTarget: String, Codable, CaseIterable, Equatable, Hashable, Sendable {
     case message
     case author
 }
 
-public enum ChatPresentationRuleMatchMode: String, Codable, CaseIterable, Equatable, Sendable {
+public enum ChatPresentationRuleMatchMode: String, Codable, CaseIterable, Equatable, Hashable, Sendable {
     case contains
     case regex
 }
