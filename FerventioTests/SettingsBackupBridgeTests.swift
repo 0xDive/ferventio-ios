@@ -112,6 +112,37 @@ struct SettingsBackupBridgeTests {
     }
 
     @Test
+    func importPlanNormalizesChannelsBeforeCapacityAndSelection() throws {
+        var content = try sampleExport().document.content
+        content.channels = SettingsBackupChannels(
+            logins: [
+                "  Alpha  ",
+                "ALPHA",
+                "   ",
+                "Beta",
+                "Gamma",
+                "Delta",
+            ],
+            selectedLogin: "  BETA  "
+        )
+        let document = try SettingsBackupCodec.makeDocument(
+            content: content,
+            appVersion: "android-test",
+            createdAt: "2026-08-14T17:31:30Z"
+        )
+
+        let plan = SettingsBackupBridge.importPlan(
+            document: document,
+            existingPresentationPreferences: .default,
+            workspaceCapacity: 3
+        )
+
+        #expect(plan.channelLogins == ["alpha", "beta", "gamma"])
+        #expect(plan.selectedChannelLogin == "beta")
+        #expect(plan.droppedChannelCount == 1)
+    }
+
+    @Test
     func importPlanFallsBackToFirstRetainedChannelWhenSelectionIsDropped() throws {
         var content = try sampleExport().document.content
         content.channels = SettingsBackupChannels(

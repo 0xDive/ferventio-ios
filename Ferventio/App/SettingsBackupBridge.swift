@@ -94,11 +94,13 @@ enum SettingsBackupBridge {
         let settings = document.content.settings
         let channels = document.content.channels
         let capacity = max(0, workspaceCapacity)
-        let normalizedLogins = channels.logins.map { $0.lowercased() }
+        let normalizedLogins = normalizedChannelLogins(channels.logins)
         let retainedLogins = Array(normalizedLogins.prefix(capacity))
-        let requestedSelection = channels.selectedLogin?.lowercased()
+        let requestedSelection = channels.selectedLogin.flatMap(
+            ChatWorkspaceRegistryStore.normalizedLogin
+        )
         let selectedLogin = requestedSelection.flatMap { selected in
-            retainedLogins.first(where: { $0.caseInsensitiveCompare(selected) == .orderedSame })
+            retainedLogins.first(where: { $0 == selected })
         } ?? retainedLogins.first
 
         return SettingsBackupImportPlan(
@@ -118,6 +120,21 @@ enum SettingsBackupBridge {
             droppedChannelCount: max(0, normalizedLogins.count - retainedLogins.count),
             unsupportedContent: unsupportedContent(in: document.content)
         )
+    }
+
+    private static func normalizedChannelLogins(_ rawLogins: [String]) -> [String] {
+        var seenLogins = Set<String>()
+        var normalizedLogins: [String] = []
+        normalizedLogins.reserveCapacity(rawLogins.count)
+
+        for rawLogin in rawLogins {
+            guard let login = ChatWorkspaceRegistryStore.normalizedLogin(rawLogin),
+                  seenLogins.insert(login).inserted else {
+                continue
+            }
+            normalizedLogins.append(login)
+        }
+        return normalizedLogins
     }
 
     private static func androidCompatibleSettings(
