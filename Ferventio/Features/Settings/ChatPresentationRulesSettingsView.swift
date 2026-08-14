@@ -159,7 +159,7 @@ private struct ChatPresentationRuleEditor: View {
                     }
                 }
 
-                Section(localized("match.section")) {
+                Section {
                     Picker(localized("match.mode"), selection: $rule.matchMode) {
                         Text(localized("match.contains"))
                             .tag(ChatPresentationRuleMatchMode.contains)
@@ -173,6 +173,8 @@ private struct ChatPresentationRuleEditor: View {
                         .autocorrectionDisabled()
 
                     Toggle(localized("case_sensitive"), isOn: $rule.caseSensitive)
+                } header: {
+                    Text(localized("match.section"))
                 } footer: {
                     if let validationError {
                         Text(validationMessage(validationError))
