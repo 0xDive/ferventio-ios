@@ -120,16 +120,84 @@ extension ChatStore {
             return
         }
 
-        if interactiveOverlayState.pollsByChannel[channelID] == nil,
-           let poll = snapshot.poll,
+        if let poll = snapshot.poll,
            poll.channelID == channelID {
-            apply(.poll(poll))
+            interactiveOverlayState = InteractiveChatOverlayReducer.reduce(
+                state: interactiveOverlayState,
+                event: .pollSnapshot(poll)
+            )
         }
 
-        if interactiveOverlayState.predictionsByChannel[channelID] == nil,
-           let prediction = snapshot.prediction,
+        if let prediction = snapshot.prediction,
            prediction.channelID == channelID {
-            apply(.prediction(prediction))
+            interactiveOverlayState = InteractiveChatOverlayReducer.reduce(
+                state: interactiveOverlayState,
+                event: .predictionSnapshot(prediction)
+            )
         }
+    }
+
+    func applyConfirmedPollMutation(
+        _ poll: PollOverlay,
+        status: PollEndStatus
+    ) {
+        guard poll.channelID == channel?.id else {
+            return
+        }
+        let confirmedStatus: PollStatus = switch status {
+        case .terminated: .terminated
+        case .archived: .archived
+        }
+        apply(.poll(PollOverlay(
+            id: poll.id,
+            channelID: poll.channelID,
+            title: poll.title,
+            choices: poll.choices,
+            status: confirmedStatus,
+            startedAtMilliseconds: poll.startedAtMilliseconds,
+            endsAtMilliseconds: poll.endsAtMilliseconds,
+            endedAtMilliseconds: poll.endedAtMilliseconds,
+            channelPointsVotingEnabled: poll.channelPointsVotingEnabled,
+            channelPointsPerVote: poll.channelPointsPerVote,
+            bitsVotingEnabled: poll.bitsVotingEnabled,
+            bitsPerVote: poll.bitsPerVote,
+            updatedAtMilliseconds: nextInteractiveMutationTimestamp(
+                after: poll.updatedAtMilliseconds
+            )
+        )))
+    }
+
+    func applyConfirmedPredictionMutation(
+        _ prediction: PredictionOverlay,
+        status: PredictionEndStatus,
+        winningOutcomeID: String?
+    ) {
+        guard prediction.channelID == channel?.id else {
+            return
+        }
+        let confirmedStatus: PredictionStatus = switch status {
+        case .locked: .locked
+        case .canceled: .canceled
+        case .resolved: .resolved
+        }
+        apply(.prediction(PredictionOverlay(
+            id: prediction.id,
+            channelID: prediction.channelID,
+            title: prediction.title,
+            outcomes: prediction.outcomes,
+            status: confirmedStatus,
+            startedAtMilliseconds: prediction.startedAtMilliseconds,
+            locksAtMilliseconds: prediction.locksAtMilliseconds,
+            lockedAtMilliseconds: prediction.lockedAtMilliseconds,
+            endedAtMilliseconds: prediction.endedAtMilliseconds,
+            winningOutcomeID: status == .resolved ? winningOutcomeID : nil,
+            updatedAtMilliseconds: nextInteractiveMutationTimestamp(
+                after: prediction.updatedAtMilliseconds
+            )
+        )))
+    }
+
+    private func nextInteractiveMutationTimestamp(after timestamp: Int64) -> Int64 {
+        timestamp == .max ? .max : timestamp + 1
     }
 }

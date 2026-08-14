@@ -52,10 +52,10 @@ struct RootView: View {
                     await environment.createPrediction(draft)
                 },
                 endPoll: { poll, status in
-                    await environment.endPoll(poll, status: status)
+                    await environment.endPollAndReconcile(poll, status: status)
                 },
                 endPrediction: { prediction, status, winningOutcomeID in
-                    await environment.endPrediction(
+                    await environment.endPredictionAndReconcile(
                         prediction,
                         status: status,
                         winningOutcomeID: winningOutcomeID
