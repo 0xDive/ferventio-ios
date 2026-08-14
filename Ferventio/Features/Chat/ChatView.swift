@@ -3,9 +3,12 @@ import FerventioDomain
 import SwiftUI
 
 struct ChatView: View {
+    @Environment(\.scenePhase) private var scenePhase
+
     @Bindable var store: ChatStore
     @Bindable var assets: ChatAssetStore
     @Bindable var historyPager: ChatHistoryPager
+    let composerStore: ChatComposerStore
     let repeatCollapseEnabled: Bool
     let canExecuteNuke: Bool
     let loadUserProfile: (ChatAuthor) async -> TwitchUser?
@@ -36,6 +39,27 @@ struct ChatView: View {
             historyPager.reset(channelID: channelID)
             hasPositionedInitialFeed = false
             sheetRequest = nil
+            Task {
+                let draft = await composerStore.activate(channelID: channelID)
+                guard store.channel?.id == channelID else {
+                    return
+                }
+                if store.composerText != draft {
+                    store.composerText = draft
+                }
+            }
+        }
+        .onChange(of: store.composerText, initial: true) { _, text in
+            composerStore.updateDraft(channelID: store.channel?.id, text: text)
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .background else {
+                return
+            }
+            Task { await composerStore.flush() }
+        }
+        .onDisappear {
+            Task { await composerStore.flush() }
         }
         .sheet(item: $sheetRequest) { request in
             switch request.content {
@@ -264,16 +288,34 @@ struct ChatView: View {
             }
 
             HStack(alignment: .bottom, spacing: 10) {
+                if !composerStore.sentHistory.isEmpty {
+                    Menu {
+                        ForEach(composerStore.sentHistory) { entry in
+                            Button {
+                                store.composerText = entry.text
+                            } label: {
+                                Text(entry.text)
+                                    .lineLimit(2)
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "clock.arrow.circlepath")
+                            .accessibilityLabel(Text("chat.sent_history"))
+                    }
+                    .buttonStyle(.borderless)
+                    .disabled(store.connectionState != .connected || store.isSending)
+                }
+
                 TextField("chat.composer.placeholder", text: $store.composerText, axis: .vertical)
                     .lineLimit(1...4)
                     .submitLabel(.send)
                     .disabled(store.connectionState != .connected)
                     .onSubmit {
-                        Task { await store.sendCurrentMessage() }
+                        Task { await sendCurrentMessage() }
                     }
 
                 Button {
-                    Task { await store.sendCurrentMessage() }
+                    Task { await sendCurrentMessage() }
                 } label: {
                     if store.isSending {
                         ProgressView()
@@ -288,6 +330,22 @@ struct ChatView: View {
             .padding(.horizontal)
             .padding(.vertical, 10)
         }
+    }
+
+    private func sendCurrentMessage() async {
+        guard store.canSend,
+              let channelID = store.channel?.id else {
+            return
+        }
+        let text = store.composerText
+
+        await store.sendCurrentMessage()
+
+        guard store.channel?.id == channelID,
+              !store.showsSendError else {
+            return
+        }
+        await composerStore.recordSuccessfulSend(channelID: channelID, text: text)
     }
 
     private var emptyTitleKey: String.LocalizationValue {

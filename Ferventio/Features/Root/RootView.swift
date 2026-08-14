@@ -5,6 +5,7 @@ struct RootView: View {
     @Bindable var environment: AppEnvironment
     @State private var showsChatHistorySettings = false
     @State private var showsInteractiveManagement = false
+    @State private var chatComposerStore = ChatComposerStore.live()
 
     var body: some View {
         NavigationStack {
@@ -98,6 +99,7 @@ struct RootView: View {
                 store: environment.chatStore,
                 assets: environment.chatAssetStore,
                 historyPager: environment.chatHistoryPager,
+                composerStore: chatComposerStore,
                 repeatCollapseEnabled: environment.chatPresentationPreferences.repeatCollapseEnabled,
                 canExecuteNuke: environment.canExecuteNuke,
                 loadUserProfile: { author in

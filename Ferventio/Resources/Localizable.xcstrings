@@ -169,6 +169,12 @@
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "Сообщение не отправлено" } }
       }
     },
+    "chat.sent_history" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Sent messages" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Отправленные сообщения" } }
+      }
+    },
     "common.ok" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "OK" } },
