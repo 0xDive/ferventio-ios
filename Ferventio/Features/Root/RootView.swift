@@ -9,6 +9,7 @@ struct RootView: View {
     @State private var showsInteractiveManagement = false
     @State private var showsNewWorkspace = false
     @State private var showsWorkspaceLimit = false
+    @State private var showsLiveWorkspaceLimit = false
     @State private var newWorkspaceLogin = ""
     @State private var workspaceRegistry = ChatWorkspaceRegistryStore()
     @State private var workspaceRuntimePool = ChatWorkspaceRuntimePool(
@@ -60,6 +61,14 @@ struct RootView: View {
             Button("common.ok", role: .cancel) {}
         } message: {
             Text("chat.workspace.limit.message")
+        }
+        .alert(
+            String(localized: "chat.workspace.live_limit.title"),
+            isPresented: $showsLiveWorkspaceLimit
+        ) {
+            Button("common.ok", role: .cancel) {}
+        } message: {
+            Text("chat.workspace.live_limit.message")
         }
         .sheet(isPresented: $showsChatHistorySettings) {
             ChatHistorySettingsView(
@@ -277,7 +286,7 @@ struct RootView: View {
                 try await environment.executeNuke(plan: plan, in: runtime)
             }
         ) {
-            await environment.connectChat(in: runtime)
+            await connectWorkspace(runtime)
         }
     }
 
@@ -383,7 +392,7 @@ struct RootView: View {
             guard runtime.chatStore.connectionState != .connected else {
                 return
             }
-            Task { await environment.connectChat(in: runtime) }
+            Task { await connectWorkspace(runtime) }
 
         case .invalidLogin:
             break
@@ -391,6 +400,17 @@ struct RootView: View {
         case .capacityReached:
             showsWorkspaceLimit = true
         }
+    }
+
+    private func connectWorkspace(_ runtime: ChatWorkspaceRuntime) async {
+        guard workspaceRuntimePool.beginConnection(for: runtime) else {
+            showsLiveWorkspaceLimit = true
+            return
+        }
+        defer {
+            workspaceRuntimePool.finishConnectionAttempt(for: runtime)
+        }
+        await environment.connectChat(in: runtime)
     }
 
     private func selectWorkspace(_ workspace: ChatWorkspace) {

@@ -217,10 +217,22 @@
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "Достигнут лимит вкладок" } }
       }
     },
+    "chat.workspace.live_limit.message" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Twitch allows up to three active EventSub WebSocket connections for this user token. Close a live workspace before connecting another one." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Twitch допускает до трёх активных WebSocket-подключений EventSub для этого токена. Закройте активную вкладку перед подключением следующей." } }
+      }
+    },
+    "chat.workspace.live_limit.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Live connection limit reached" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Достигнут лимит активных подключений" } }
+      }
+    },
     "chat.workspace.new.message" : {
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Enter a Twitch channel login. The new workspace will connect immediately." } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Введите логин Twitch-канала. Новая вкладка подключится сразу." } }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Enter a Twitch channel login. The new workspace will connect immediately when a live connection slot is available." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Введите логин Twitch-канала. Новая вкладка подключится сразу, если доступен слот активного подключения." } }
       }
     },
     "chat.workspace.new.title" : {

@@ -4,6 +4,7 @@ import Foundation
 final class ChatWorkspaceRuntime: Identifiable {
     let id: UUID
     private(set) var workspace: ChatWorkspace
+    private(set) var isClosed = false
     let chatStore: ChatStore
     let chatAssetStore: ChatAssetStore
     let chatHistoryPager: ChatHistoryPager
@@ -54,10 +55,22 @@ final class ChatWorkspaceRuntime: Identifiable {
     }
 
     func updateWorkspace(_ workspace: ChatWorkspace) {
-        guard workspace.id == id else {
+        guard workspace.id == id, !isClosed else {
             return
         }
         self.workspace = workspace
+    }
+
+    func close() async {
+        guard !isClosed else {
+            return
+        }
+        isClosed = true
+        await chatComposerStore.flush()
+        await chatStore.disconnect()
+        chatHistoryPager.reset(channelID: nil)
+        chatAssetStore.reset()
+        interactiveMutationStore.clear()
     }
 }
 
@@ -65,7 +78,13 @@ final class ChatWorkspaceRuntime: Identifiable {
 final class ChatWorkspaceRuntimePool {
     typealias Factory = @MainActor (ChatWorkspace, ChatHistoryPreferences) -> ChatWorkspaceRuntime
 
+    // Twitch currently allows at most three EventSub WebSocket connections with
+    // enabled subscriptions for a user-token/client-ID tuple. Keep navigation
+    // capacity separate so additional tabs may remain persisted but offline.
+    static let maximumLiveConnections = 3
+
     private var runtimes: [UUID: ChatWorkspaceRuntime] = [:]
+    private var connectionReservations: Set<UUID> = []
     private var historyPreferences: ChatHistoryPreferences
     private let factory: Factory
 
@@ -86,8 +105,25 @@ final class ChatWorkspaceRuntimePool {
         runtimes.count
     }
 
+    var liveConnectionCount: Int {
+        runtimes.values.reduce(into: 0) { count, runtime in
+            if Self.reservesLiveConnection(runtime.chatStore.connectionState) {
+                count += 1
+            }
+        }
+    }
+
+    var occupiedConnectionSlotCount: Int {
+        var occupiedIDs = connectionReservations
+        for (id, runtime) in runtimes
+        where Self.reservesLiveConnection(runtime.chatStore.connectionState) {
+            occupiedIDs.insert(id)
+        }
+        return occupiedIDs.count
+    }
+
     func runtime(for workspace: ChatWorkspace) -> ChatWorkspaceRuntime {
-        if let existing = runtimes[workspace.id] {
+        if let existing = runtimes[workspace.id], !existing.isClosed {
             existing.updateWorkspace(workspace)
             return existing
         }
@@ -103,54 +139,86 @@ final class ChatWorkspaceRuntimePool {
     }
 
     func existingRuntime(id: UUID) -> ChatWorkspaceRuntime? {
-        runtimes[id]
+        guard let runtime = runtimes[id], !runtime.isClosed else {
+            return nil
+        }
+        return runtime
+    }
+
+    func beginConnection(for runtime: ChatWorkspaceRuntime) -> Bool {
+        guard !runtime.isClosed,
+              let pooledRuntime = runtimes[runtime.id],
+              pooledRuntime === runtime else {
+            return false
+        }
+        if Self.reservesLiveConnection(runtime.chatStore.connectionState) {
+            return true
+        }
+        guard !connectionReservations.contains(runtime.id),
+              occupiedConnectionSlotCount < Self.maximumLiveConnections else {
+            return false
+        }
+        connectionReservations.insert(runtime.id)
+        return true
+    }
+
+    func finishConnectionAttempt(for runtime: ChatWorkspaceRuntime) {
+        connectionReservations.remove(runtime.id)
     }
 
     func remove(id: UUID) async {
+        connectionReservations.remove(id)
         guard let runtime = runtimes.removeValue(forKey: id) else {
             return
         }
-        await runtime.chatComposerStore.flush()
-        await runtime.chatStore.disconnect()
-        runtime.chatHistoryPager.reset(channelID: nil)
-        runtime.chatAssetStore.reset()
-        runtime.interactiveMutationStore.clear()
+        await runtime.close()
     }
 
     func removeAll() async {
         for id in Array(runtimes.keys) {
             await remove(id: id)
         }
+        connectionReservations.removeAll(keepingCapacity: false)
     }
 
     func updateHistoryPreferences(_ preferences: ChatHistoryPreferences) async {
         historyPreferences = preferences
-        for runtime in runtimes.values {
+        for runtime in runtimes.values where !runtime.isClosed {
             await runtime.chatStore.updateHistoryPreferences(preferences)
             runtime.chatHistoryPager.updatePreferences(preferences)
         }
     }
 
     func suspendAll() async {
-        for runtime in runtimes.values {
+        for runtime in runtimes.values where !runtime.isClosed {
             await runtime.chatComposerStore.flush()
             await runtime.chatStore.suspend()
         }
     }
 
     func resumeAll() async {
-        for runtime in runtimes.values {
+        for runtime in runtimes.values where !runtime.isClosed {
             await runtime.chatStore.resumeIfNeeded()
         }
     }
 
     func disconnectAll() async {
-        for runtime in runtimes.values {
+        connectionReservations.removeAll(keepingCapacity: false)
+        for runtime in runtimes.values where !runtime.isClosed {
             await runtime.chatComposerStore.flush()
             await runtime.chatStore.disconnect()
             runtime.chatHistoryPager.reset(channelID: nil)
             runtime.chatAssetStore.reset()
             runtime.interactiveMutationStore.clear()
+        }
+    }
+
+    static func reservesLiveConnection(_ state: ChatStore.ConnectionState) -> Bool {
+        switch state {
+        case .connecting, .connected, .reconnecting, .suspended:
+            true
+        case .disconnected, .failed:
+            false
         }
     }
 }

@@ -169,15 +169,20 @@ final class AppEnvironment {
         await connectChat(
             store: chatStore,
             assets: chatAssetStore,
-            mutationStore: interactiveMutationStore
+            mutationStore: interactiveMutationStore,
+            runtime: nil
         )
     }
 
     func connectChat(in runtime: ChatWorkspaceRuntime) async {
+        guard !runtime.isClosed else {
+            return
+        }
         await connectChat(
             store: runtime.chatStore,
             assets: runtime.chatAssetStore,
-            mutationStore: runtime.interactiveMutationStore
+            mutationStore: runtime.interactiveMutationStore,
+            runtime: runtime
         )
     }
 
@@ -344,8 +349,12 @@ final class AppEnvironment {
     private func connectChat(
         store: ChatStore,
         assets: ChatAssetStore,
-        mutationStore: InteractiveChatMutationStore
+        mutationStore: InteractiveChatMutationStore,
+        runtime: ChatWorkspaceRuntime?
     ) async {
+        guard connectionRequestIsValid(runtime) else {
+            return
+        }
         guard let grant = authenticationGrant else {
             store.failChannelResolution()
             return
@@ -358,6 +367,10 @@ final class AppEnvironment {
 
         do {
             let channel = try await twitchBootstrap.resolveChannel(login: login, for: grant)
+            guard connectionRequestIsValid(runtime) else {
+                return
+            }
+
             assets.reset()
             mutationStore.clear()
             await store.connect(
@@ -365,6 +378,12 @@ final class AppEnvironment {
                 lease: grant.accessLease,
                 currentUser: currentUser
             )
+            guard connectionRequestIsValid(runtime) else {
+                await store.disconnect()
+                assets.reset()
+                mutationStore.clear()
+                return
+            }
             guard store.connectionState == .connected else {
                 return
             }
@@ -383,13 +402,25 @@ final class AppEnvironment {
             )
             let (_, _, snapshot) = await (badges, thirdPartyEmotes, interactiveSnapshot)
 
+            guard connectionRequestIsValid(runtime) else {
+                await store.disconnect()
+                assets.reset()
+                mutationStore.clear()
+                return
+            }
             guard store.channel?.id == channel.id else {
                 return
             }
             store.setThirdPartyEmoteCatalog(assets.thirdPartyEmoteCatalog)
             store.applyHydratedInteractiveOverlays(snapshot)
+        } catch is CancellationError {
+            if connectionRequestIsValid(runtime) {
+                store.failChannelResolution()
+            }
         } catch {
-            store.failChannelResolution()
+            if connectionRequestIsValid(runtime) {
+                store.failChannelResolution()
+            }
         }
     }
 
@@ -578,6 +609,10 @@ final class AppEnvironment {
             return
         }
         store.applyHydratedInteractiveOverlays(snapshot)
+    }
+
+    private func connectionRequestIsValid(_ runtime: ChatWorkspaceRuntime?) -> Bool {
+        runtime?.isClosed != true
     }
 
     private func canExecuteNuke(channel: ChatChannel?) -> Bool {
