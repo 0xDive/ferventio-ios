@@ -25,6 +25,13 @@ final class ChatHistoryPager {
         self.preferences = preferences
     }
 
+    func prepare(channelID: String?) {
+        guard self.channelID != channelID else {
+            return
+        }
+        reset(channelID: channelID)
+    }
+
     func reset(channelID: String?) {
         generation &+= 1
         self.channelID = channelID

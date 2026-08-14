@@ -117,6 +117,12 @@ final class ChatWorkspaceRuntimePool {
         runtime.interactiveMutationStore.clear()
     }
 
+    func removeAll() async {
+        for id in Array(runtimes.keys) {
+            await remove(id: id)
+        }
+    }
+
     func updateHistoryPreferences(_ preferences: ChatHistoryPreferences) async {
         historyPreferences = preferences
         for runtime in runtimes.values {

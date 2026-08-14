@@ -9,6 +9,7 @@ struct ChatView: View {
     @Bindable var assets: ChatAssetStore
     @Bindable var historyPager: ChatHistoryPager
     let composerStore: ChatComposerStore
+    let workspaceLogin: String?
     let repeatCollapseEnabled: Bool
     let canExecuteNuke: Bool
     let loadUserProfile: (ChatAuthor) async -> TwitchUser?
@@ -36,7 +37,7 @@ struct ChatView: View {
             composerBar
         }
         .onChange(of: store.channel?.id, initial: true) { _, channelID in
-            historyPager.reset(channelID: channelID)
+            historyPager.prepare(channelID: channelID)
             hasPositionedInitialFeed = false
             sheetRequest = nil
             Task {
@@ -104,13 +105,20 @@ struct ChatView: View {
 
     private var channelBar: some View {
         HStack(spacing: 10) {
-            TextField("chat.channel.placeholder", text: $store.channelInput)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .submitLabel(.go)
-                .onSubmit {
-                    Task { await connect() }
-                }
+            if let workspaceLogin {
+                Label("#\(workspaceLogin)", systemImage: channelStatusSystemImage)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+            } else {
+                TextField("chat.channel.placeholder", text: $store.channelInput)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .submitLabel(.go)
+                    .onSubmit {
+                        Task { await connect() }
+                    }
+            }
 
             Button {
                 Task { await connect() }
@@ -346,6 +354,21 @@ struct ChatView: View {
             return
         }
         await composerStore.recordSuccessfulSend(channelID: channelID, text: text)
+    }
+
+    private var channelStatusSystemImage: String {
+        switch store.connectionState {
+        case .connected:
+            "checkmark.circle.fill"
+        case .connecting, .reconnecting:
+            "antenna.radiowaves.left.and.right"
+        case .suspended:
+            "pause.circle"
+        case .failed:
+            "exclamationmark.circle"
+        case .disconnected:
+            "number"
+        }
     }
 
     private var emptyTitleKey: String.LocalizationValue {

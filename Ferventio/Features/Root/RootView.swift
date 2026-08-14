@@ -2,10 +2,18 @@ import FerventioDomain
 import SwiftUI
 
 struct RootView: View {
+    @Environment(\.scenePhase) private var scenePhase
+
     @Bindable var environment: AppEnvironment
     @State private var showsChatHistorySettings = false
     @State private var showsInteractiveManagement = false
-    @State private var chatComposerStore = ChatComposerStore.live()
+    @State private var showsNewWorkspace = false
+    @State private var showsWorkspaceLimit = false
+    @State private var newWorkspaceLogin = ""
+    @State private var workspaceRegistry = ChatWorkspaceRegistryStore()
+    @State private var workspaceRuntimePool = ChatWorkspaceRuntimePool(
+        historyPreferences: .default
+    )
 
     var body: some View {
         NavigationStack {
@@ -30,39 +38,91 @@ struct RootView: View {
         } message: {
             Text("auth.error.message")
         }
+        .alert(
+            String(localized: "chat.workspace.new.title"),
+            isPresented: $showsNewWorkspace
+        ) {
+            TextField("chat.channel.placeholder", text: $newWorkspaceLogin)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+            Button("chat.workspace.cancel", role: .cancel) {}
+            Button("chat.workspace.open") {
+                openWorkspace()
+            }
+            .disabled(ChatWorkspaceRegistryStore.normalizedLogin(newWorkspaceLogin) == nil)
+        } message: {
+            Text("chat.workspace.new.message")
+        }
+        .alert(
+            String(localized: "chat.workspace.limit.title"),
+            isPresented: $showsWorkspaceLimit
+        ) {
+            Button("common.ok", role: .cancel) {}
+        } message: {
+            Text("chat.workspace.limit.message")
+        }
         .sheet(isPresented: $showsChatHistorySettings) {
             ChatHistorySettingsView(
                 preferences: environment.chatHistoryPreferences(),
                 presentationPreferences: environment.chatPresentationPreferences
             ) { preferences, presentationPreferences in
-                _ = await environment.updateChatHistoryPreferences(preferences)
+                let saved = await environment.updateChatHistoryPreferences(preferences)
+                await workspaceRuntimePool.updateHistoryPreferences(saved)
                 _ = environment.updateChatPresentationPreferences(presentationPreferences)
             }
         }
         .sheet(isPresented: $showsInteractiveManagement) {
-            InteractiveChatManagementView(
-                poll: currentPoll,
-                prediction: currentPrediction,
-                canManagePolls: environment.canManagePolls,
-                canManagePredictions: environment.canManagePredictions,
-                mutationStore: environment.interactiveMutationStore,
-                createPoll: { draft in
-                    await environment.createPoll(draft)
-                },
-                createPrediction: { draft in
-                    await environment.createPrediction(draft)
-                },
-                endPoll: { poll, status in
-                    await environment.endPollAndReconcile(poll, status: status)
-                },
-                endPrediction: { prediction, status, winningOutcomeID in
-                    await environment.endPredictionAndReconcile(
-                        prediction,
-                        status: status,
-                        winningOutcomeID: winningOutcomeID
-                    )
-                }
-            )
+            if let runtime = activeWorkspaceRuntime {
+                InteractiveChatManagementView(
+                    poll: currentPoll(in: runtime),
+                    prediction: currentPrediction(in: runtime),
+                    canManagePolls: environment.canManagePolls(in: runtime),
+                    canManagePredictions: environment.canManagePredictions(in: runtime),
+                    mutationStore: runtime.interactiveMutationStore,
+                    createPoll: { draft in
+                        await environment.createPoll(draft, in: runtime)
+                    },
+                    createPrediction: { draft in
+                        await environment.createPrediction(draft, in: runtime)
+                    },
+                    endPoll: { poll, status in
+                        await environment.endPollAndReconcile(
+                            poll,
+                            status: status,
+                            in: runtime
+                        )
+                    },
+                    endPrediction: { prediction, status, winningOutcomeID in
+                        await environment.endPredictionAndReconcile(
+                            prediction,
+                            status: status,
+                            winningOutcomeID: winningOutcomeID,
+                            in: runtime
+                        )
+                    }
+                )
+            }
+        }
+        .onChange(of: environment.session?.userID, initial: true) { _, userID in
+            guard userID != nil else {
+                return
+            }
+            Task { await prepareWorkspaceRuntimes() }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard environment.state == .signedIn else {
+                return
+            }
+            switch phase {
+            case .background:
+                Task { await workspaceRuntimePool.suspendAll() }
+            case .active:
+                Task { await workspaceRuntimePool.resumeAll() }
+            case .inactive:
+                break
+            @unknown default:
+                break
+            }
         }
     }
 
@@ -95,27 +155,12 @@ struct RootView: View {
         VStack(spacing: 0) {
             accountHeader
             Divider()
-            ChatView(
-                store: environment.chatStore,
-                assets: environment.chatAssetStore,
-                historyPager: environment.chatHistoryPager,
-                composerStore: chatComposerStore,
-                repeatCollapseEnabled: environment.chatPresentationPreferences.repeatCollapseEnabled,
-                canExecuteNuke: environment.canExecuteNuke,
-                loadUserProfile: { author in
-                    await environment.loadUserProfile(for: author)
-                },
-                canTimeoutUser: { author in
-                    environment.canTimeoutUser(author)
-                },
-                timeoutUser: { author in
-                    try await environment.timeoutUserFromCard(author)
-                },
-                executeNuke: { plan in
-                    try await environment.executeNuke(plan: plan)
-                }
-            ) {
-                await environment.connectChat()
+            workspaceBar
+            Divider()
+            if let runtime = activeWorkspaceRuntime {
+                workspaceChat(runtime)
+            } else {
+                emptyWorkspaceView
             }
         }
         .toolbar {
@@ -137,11 +182,118 @@ struct RootView: View {
                 }
 
                 Button("auth.sign_out", role: .destructive) {
-                    Task { await environment.signOut() }
+                    Task {
+                        await workspaceRuntimePool.removeAll()
+                        await environment.signOut()
+                    }
                 }
                 .disabled(environment.isSigningOut)
             }
         }
+    }
+
+    private var workspaceBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(workspaceRegistry.workspaces) { workspace in
+                    workspaceChip(workspace)
+                }
+
+                Button {
+                    presentNewWorkspace()
+                } label: {
+                    Image(systemName: "plus")
+                        .frame(width: 28, height: 28)
+                        .accessibilityLabel(Text("chat.workspace.add"))
+                }
+                .buttonStyle(.borderless)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+        }
+    }
+
+    private func workspaceChip(_ workspace: ChatWorkspace) -> some View {
+        let isActive = workspaceRegistry.activeWorkspaceID == workspace.id
+        return HStack(spacing: 5) {
+            Button {
+                selectWorkspace(workspace)
+            } label: {
+                Text("#\(workspace.login)")
+                    .font(.subheadline.weight(isActive ? .semibold : .regular))
+                    .lineLimit(1)
+            }
+            .buttonStyle(.plain)
+
+            if isActive {
+                Button(role: .destructive) {
+                    closeWorkspace(workspace)
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.caption2.weight(.bold))
+                        .accessibilityLabel(Text("chat.workspace.close"))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(
+            isActive ? Color.accentColor.opacity(0.16) : Color.secondary.opacity(0.08),
+            in: Capsule()
+        )
+        .overlay {
+            Capsule()
+                .stroke(isActive ? Color.accentColor : Color.clear, lineWidth: 1)
+        }
+        .contextMenu {
+            Button(role: .destructive) {
+                closeWorkspace(workspace)
+            } label: {
+                Label("chat.workspace.close", systemImage: "xmark")
+            }
+        }
+    }
+
+    private func workspaceChat(_ runtime: ChatWorkspaceRuntime) -> some View {
+        ChatView(
+            store: runtime.chatStore,
+            assets: runtime.chatAssetStore,
+            historyPager: runtime.chatHistoryPager,
+            composerStore: runtime.chatComposerStore,
+            workspaceLogin: runtime.workspace.login,
+            repeatCollapseEnabled: environment.chatPresentationPreferences.repeatCollapseEnabled,
+            canExecuteNuke: environment.canExecuteNuke(in: runtime),
+            loadUserProfile: { author in
+                await environment.loadUserProfile(for: author)
+            },
+            canTimeoutUser: { author in
+                environment.canTimeoutUser(author, in: runtime)
+            },
+            timeoutUser: { author in
+                try await environment.timeoutUserFromCard(author, in: runtime)
+            },
+            executeNuke: { plan in
+                try await environment.executeNuke(plan: plan, in: runtime)
+            }
+        ) {
+            await environment.connectChat(in: runtime)
+        }
+    }
+
+    private var emptyWorkspaceView: some View {
+        VStack(spacing: 18) {
+            ContentUnavailableView(
+                String(localized: "chat.workspace.empty.title"),
+                systemImage: "rectangle.stack.badge.plus",
+                description: Text("chat.workspace.empty.message")
+            )
+            Button("chat.workspace.add") {
+                presentNewWorkspace()
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var accountHeader: some View {
@@ -184,22 +336,87 @@ struct RootView: View {
         }
     }
 
-    private var currentPoll: PollOverlay? {
-        guard let channelID = environment.chatStore.channel?.id else {
+    private var activeWorkspaceRuntime: ChatWorkspaceRuntime? {
+        guard let workspace = workspaceRegistry.activeWorkspace else {
             return nil
         }
-        return environment.chatStore.interactiveOverlayState.pollsByChannel[channelID]
+        return workspaceRuntimePool.runtime(for: workspace)
     }
 
-    private var currentPrediction: PredictionOverlay? {
-        guard let channelID = environment.chatStore.channel?.id else {
+    private func currentPoll(in runtime: ChatWorkspaceRuntime) -> PollOverlay? {
+        guard let channelID = runtime.chatStore.channel?.id else {
             return nil
         }
-        return environment.chatStore.interactiveOverlayState.predictionsByChannel[channelID]
+        return runtime.chatStore.interactiveOverlayState.pollsByChannel[channelID]
+    }
+
+    private func currentPrediction(in runtime: ChatWorkspaceRuntime) -> PredictionOverlay? {
+        guard let channelID = runtime.chatStore.channel?.id else {
+            return nil
+        }
+        return runtime.chatStore.interactiveOverlayState.predictionsByChannel[channelID]
     }
 
     private var canOpenInteractiveManagement: Bool {
-        environment.canManagePolls || environment.canManagePredictions
+        guard let runtime = activeWorkspaceRuntime else {
+            return false
+        }
+        return environment.canManagePolls(in: runtime)
+            || environment.canManagePredictions(in: runtime)
+    }
+
+    private func presentNewWorkspace() {
+        guard workspaceRegistry.workspaces.count < ChatWorkspaceRegistryStore.maximumWorkspaces else {
+            showsWorkspaceLimit = true
+            return
+        }
+        newWorkspaceLogin = ""
+        showsNewWorkspace = true
+    }
+
+    private func openWorkspace() {
+        switch workspaceRegistry.open(login: newWorkspaceLogin) {
+        case let .opened(workspace):
+            showsInteractiveManagement = false
+            let runtime = workspaceRuntimePool.runtime(for: workspace)
+            newWorkspaceLogin = ""
+            guard runtime.chatStore.connectionState != .connected else {
+                return
+            }
+            Task { await environment.connectChat(in: runtime) }
+
+        case .invalidLogin:
+            break
+
+        case .capacityReached:
+            showsWorkspaceLimit = true
+        }
+    }
+
+    private func selectWorkspace(_ workspace: ChatWorkspace) {
+        showsInteractiveManagement = false
+        _ = workspaceRegistry.select(id: workspace.id)
+        _ = workspaceRuntimePool.runtime(for: workspace)
+    }
+
+    private func closeWorkspace(_ workspace: ChatWorkspace) {
+        showsInteractiveManagement = false
+        _ = workspaceRegistry.close(id: workspace.id)
+        Task { await workspaceRuntimePool.remove(id: workspace.id) }
+    }
+
+    private func prepareWorkspaceRuntimes() async {
+        guard environment.state == .signedIn else {
+            return
+        }
+        if workspaceRegistry.workspaces.isEmpty,
+           let login = environment.session?.login {
+            _ = workspaceRegistry.open(login: login)
+        }
+        workspaceRuntimePool.preload(workspaceRegistry.workspaces)
+        await workspaceRuntimePool.updateHistoryPreferences(
+            environment.chatHistoryPreferences()
+        )
     }
 
     private func settingsLocalized(_ key: String.LocalizationValue) -> String {

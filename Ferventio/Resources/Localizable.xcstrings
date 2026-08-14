@@ -93,14 +93,14 @@
     },
     "chat.empty.disconnected.message" : {
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Enter a Twitch channel login to start reading chat." } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Введите логин Twitch-канала, чтобы начать читать чат." } }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Connect this workspace to start reading chat." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Подключите эту вкладку, чтобы начать читать чат." } }
       }
     },
     "chat.empty.disconnected.title" : {
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Choose a channel" } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Выберите канал" } }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Workspace disconnected" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Вкладка отключена" } }
       }
     },
     "chat.empty.failed.message" : {
@@ -173,6 +173,66 @@
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Sent messages" } },
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "Отправленные сообщения" } }
+      }
+    },
+    "chat.workspace.add" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Add workspace" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Добавить вкладку" } }
+      }
+    },
+    "chat.workspace.cancel" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Cancel" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Отмена" } }
+      }
+    },
+    "chat.workspace.close" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Close workspace" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Закрыть вкладку" } }
+      }
+    },
+    "chat.workspace.empty.message" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Add a Twitch channel workspace to start chatting." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Добавьте вкладку Twitch-канала, чтобы открыть чат." } }
+      }
+    },
+    "chat.workspace.empty.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No open workspaces" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Нет открытых вкладок" } }
+      }
+    },
+    "chat.workspace.limit.message" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Close an existing workspace before opening another one." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Закройте существующую вкладку перед открытием новой." } }
+      }
+    },
+    "chat.workspace.limit.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Workspace limit reached" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Достигнут лимит вкладок" } }
+      }
+    },
+    "chat.workspace.new.message" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Enter a Twitch channel login. The new workspace will connect immediately." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Введите логин Twitch-канала. Новая вкладка подключится сразу." } }
+      }
+    },
+    "chat.workspace.new.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "New workspace" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Новая вкладка" } }
+      }
+    },
+    "chat.workspace.open" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Open" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Открыть" } }
       }
     },
     "common.ok" : {
