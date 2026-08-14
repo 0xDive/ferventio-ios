@@ -1,6 +1,84 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "backup.error.no_file" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No backup file was selected." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Файл резервной копии не выбран." } }
+      }
+    },
+    "backup.error.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Backup error" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Ошибка резервной копии" } }
+      }
+    },
+    "backup.export" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Export backup" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Экспортировать копию" } }
+      }
+    },
+    "backup.export.anyway" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Export anyway" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Всё равно экспортировать" } }
+      }
+    },
+    "backup.export.warning.message" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%d iOS-only chat presentation rules cannot be represented in Android backup v2 and will not be exported." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "%d правил отображения чата, доступных только на iOS, нельзя представить в Android backup v2, поэтому они не будут экспортированы." } }
+      }
+    },
+    "backup.export.warning.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Incomplete portable export" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Неполный переносимый экспорт" } }
+      }
+    },
+    "backup.footer" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Uses the Android-compatible Ferventio backup v2 format. Account credentials, OAuth sessions, and Keychain secrets are never included." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Используется совместимый с Android формат Ferventio backup v2. Данные аккаунта, OAuth-сессии и секреты Keychain никогда не включаются." } }
+      }
+    },
+    "backup.import" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Import backup" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Импортировать копию" } }
+      }
+    },
+    "backup.import.channels" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%d channels will be applied." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Будет применено каналов: %d." } }
+      }
+    },
+    "backup.import.dropped" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%d channels exceed the iOS workspace limit and will be skipped." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Каналов сверх лимита рабочих вкладок iOS будет пропущено: %d." } }
+      }
+    },
+    "backup.import.ready" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Backup ready to apply when you tap Done" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Копия готова к применению после нажатия «Готово»" } }
+      }
+    },
+    "backup.import.unsupported" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Some valid Android-only backup content is not supported on iOS yet and will be skipped." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Часть корректных данных резервной копии, доступных только на Android, пока не поддерживается на iOS и будет пропущена." } }
+      }
+    },
+    "backup.section" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Settings backup" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Резервная копия настроек" } }
+      }
+    },
     "cancel" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Cancel" } },
@@ -83,6 +161,12 @@
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Done" } },
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "Готово" } }
+      }
+    },
+    "ok" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "OK" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "ОК" } }
       }
     },
     "open" : {

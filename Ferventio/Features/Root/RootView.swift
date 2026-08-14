@@ -73,12 +73,17 @@ struct RootView: View {
         .sheet(isPresented: $showsChatHistorySettings) {
             ChatHistorySettingsView(
                 preferences: environment.chatHistoryPreferences(),
-                presentationPreferences: environment.chatPresentationPreferences
-            ) { preferences, presentationPreferences in
-                let saved = await environment.updateChatHistoryPreferences(preferences)
-                await workspaceRuntimePool.updateHistoryPreferences(saved)
-                _ = environment.updateChatPresentationPreferences(presentationPreferences)
-            }
+                presentationPreferences: environment.chatPresentationPreferences,
+                workspaceSnapshot: workspaceSnapshot,
+                save: { preferences, presentationPreferences in
+                    let saved = await environment.updateChatHistoryPreferences(preferences)
+                    await workspaceRuntimePool.updateHistoryPreferences(saved)
+                    _ = environment.updateChatPresentationPreferences(presentationPreferences)
+                },
+                applyWorkspaceImport: { plan in
+                    await applyWorkspaceImport(plan)
+                }
+            )
         }
         .sheet(isPresented: $showsInteractiveManagement) {
             if let runtime = activeWorkspaceRuntime {
@@ -346,6 +351,13 @@ struct RootView: View {
         }
     }
 
+    private var workspaceSnapshot: ChatWorkspaceRegistrySnapshot {
+        ChatWorkspaceRegistrySnapshot(
+            workspaces: workspaceRegistry.workspaces,
+            activeWorkspaceID: workspaceRegistry.activeWorkspaceID
+        )
+    }
+
     private var activeWorkspaceRuntime: ChatWorkspaceRuntime? {
         guard let workspace = workspaceRegistry.activeWorkspace else {
             return nil
@@ -424,6 +436,21 @@ struct RootView: View {
         showsInteractiveManagement = false
         _ = workspaceRegistry.close(id: workspace.id)
         Task { await workspaceRuntimePool.remove(id: workspace.id) }
+    }
+
+    private func applyWorkspaceImport(_ plan: SettingsBackupImportPlan) async {
+        showsInteractiveManagement = false
+        let previousIDs = Set(workspaceRegistry.workspaces.map(\.id))
+        let snapshot = workspaceRegistry.replace(
+            logins: plan.channelLogins,
+            selectedLogin: plan.selectedChannelLogin
+        )
+        let retainedIDs = Set(snapshot.workspaces.map(\.id))
+
+        for removedID in previousIDs.subtracting(retainedIDs) {
+            await workspaceRuntimePool.remove(id: removedID)
+        }
+        workspaceRuntimePool.preload(snapshot.workspaces)
     }
 
     private func prepareWorkspaceRuntimes() async {
