@@ -144,9 +144,20 @@ struct ChatView: View {
 
     @ViewBuilder
     private var messageFeed: some View {
-        if canonicalDisplayedMessages.isEmpty {
+        let canonicalMessages = canonicalDisplayedMessages
+        let projection = ChatPresentationRuleEngine.project(
+            messages: canonicalMessages,
+            rules: presentationRules
+        )
+        let visibleMessages = projection.visibleMessages
+        let groups = ChatRepeatCollapsePlanner.collapse(
+            visibleMessages,
+            config: ChatRepeatCollapseConfig(enabled: repeatCollapseEnabled)
+        )
+
+        if canonicalMessages.isEmpty {
             defaultEmptyFeed
-        } else if displayedMessages.isEmpty {
+        } else if visibleMessages.isEmpty {
             ContentUnavailableView(
                 filtersLocalized("feed.empty.title"),
                 systemImage: "line.3.horizontal.decrease.circle",
@@ -158,17 +169,23 @@ struct ChatView: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 8) {
                         if historyPager.canLoadOlderHistory {
-                            historyPagingSentinel(proxy: proxy)
+                            historyPagingSentinel(
+                                proxy: proxy,
+                                visibleMessages: visibleMessages
+                            )
                         }
 
-                        ForEach(displayedGroups) { group in
-                            repeatGroup(group)
+                        ForEach(groups) { group in
+                            repeatGroup(
+                                group,
+                                highlightedMessageIDs: projection.highlightedMessageIDs
+                            )
                         }
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 10)
                 }
-                .onChange(of: displayedMessages.last?.id, initial: true) { _, messageID in
+                .onChange(of: visibleMessages.last?.id, initial: true) { _, messageID in
                     guard let messageID else { return }
                     proxy.scrollTo(messageID, anchor: .bottom)
                     hasPositionedInitialFeed = true
@@ -186,9 +203,12 @@ struct ChatView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private func repeatGroup(_ group: ChatRepeatGroup) -> some View {
+    private func repeatGroup(
+        _ group: ChatRepeatGroup,
+        highlightedMessageIDs: Set<String>
+    ) -> some View {
         let isHighlighted = group.messages.contains { message in
-            presentationProjection.isHighlighted(messageID: message.id)
+            highlightedMessageIDs.contains(message.id)
         }
 
         return VStack(alignment: .leading, spacing: 0) {
@@ -244,7 +264,10 @@ struct ChatView: View {
     }
 
     @ViewBuilder
-    private func historyPagingSentinel(proxy: ScrollViewProxy) -> some View {
+    private func historyPagingSentinel(
+        proxy: ScrollViewProxy,
+        visibleMessages: [ChatMessage]
+    ) -> some View {
         HStack {
             Spacer(minLength: 0)
             if historyPager.isLoadingOlderHistory {
@@ -262,7 +285,6 @@ struct ChatView: View {
                 return
             }
             Task {
-                let visibleMessages = displayedMessages
                 let anchorID = await historyPager.loadOlderHistory(
                     before: visibleMessages.first,
                     excluding: Set(store.messages.map(\.id))
@@ -278,24 +300,6 @@ struct ChatView: View {
 
     private var canonicalDisplayedMessages: [ChatMessage] {
         historyPager.mergedMessages(with: store.messages)
-    }
-
-    private var presentationProjection: ChatPresentationRuleProjection {
-        ChatPresentationRuleEngine.project(
-            messages: canonicalDisplayedMessages,
-            rules: presentationRules
-        )
-    }
-
-    private var displayedMessages: [ChatMessage] {
-        presentationProjection.visibleMessages
-    }
-
-    private var displayedGroups: [ChatRepeatGroup] {
-        ChatRepeatCollapsePlanner.collapse(
-            displayedMessages,
-            config: ChatRepeatCollapseConfig(enabled: repeatCollapseEnabled)
-        )
     }
 
     private var currentPoll: PollOverlay? {
