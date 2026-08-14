@@ -137,15 +137,15 @@ struct NoopChatHistory: ChatHistoryPersisting {
     func flush() async {}
 }
 
-enum ChatHistoryFactory {
-    static func live() -> any ChatHistoryPersisting {
+enum ChatPersistenceStoreFactory {
+    private static let sharedStore: PersistenceStore? = {
         do {
             let fileManager = FileManager.default
             guard var directory = fileManager.urls(
                 for: .applicationSupportDirectory,
                 in: .userDomainMask
             ).first else {
-                return NoopChatHistory()
+                return nil
             }
             directory.appendPathComponent("Ferventio", isDirectory: true)
             try fileManager.createDirectory(
@@ -161,10 +161,22 @@ enum ChatHistoryFactory {
                 "chat-history.sqlite",
                 isDirectory: false
             )
-            let store = try PersistenceStore(path: databaseURL.path)
-            return PersistenceChatHistory(store: store)
+            return try PersistenceStore(path: databaseURL.path)
         } catch {
+            return nil
+        }
+    }()
+
+    static func liveStore() -> PersistenceStore? {
+        sharedStore
+    }
+}
+
+enum ChatHistoryFactory {
+    static func live() -> any ChatHistoryPersisting {
+        guard let store = ChatPersistenceStoreFactory.liveStore() else {
             return NoopChatHistory()
         }
+        return PersistenceChatHistory(store: store)
     }
 }
