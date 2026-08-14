@@ -213,6 +213,8 @@ private struct BttvComposedEmoteView: View {
 }
 
 private struct ChatFragmentView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     let fragment: ChatFragment
 
     var body: some View {
@@ -227,7 +229,7 @@ private struct ChatFragmentView: View {
                 url: ChatAssetResolver.twitchEmoteURL(
                     emoteID: emoteID,
                     formats: formats,
-                    animate: true,
+                    animate: !reduceMotion,
                     scale: .medium
                 ),
                 fallbackText: text,
