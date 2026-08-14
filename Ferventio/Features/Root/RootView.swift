@@ -158,6 +158,7 @@ struct RootView: View {
                         .frame(maxWidth: .infinity)
                 }
             }
+            .accessibilityLabel(Text("auth.sign_in"))
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
             .disabled(environment.isAuthorizing)
@@ -238,6 +239,7 @@ struct RootView: View {
                     .lineLimit(1)
             }
             .buttonStyle(.plain)
+            .accessibilityAddTraits(isActive ? .isSelected : [])
 
             if isActive {
                 Button(role: .destructive) {
@@ -344,6 +346,7 @@ struct RootView: View {
             }
             .frame(width: 36, height: 36)
             .clipShape(Circle())
+            .accessibilityHidden(true)
         } else {
             Image(systemName: "person.crop.circle.badge.checkmark")
                 .font(.system(size: 30))
