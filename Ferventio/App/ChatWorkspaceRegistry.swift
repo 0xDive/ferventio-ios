@@ -196,7 +196,7 @@ final class ChatWorkspaceRegistryStore {
         )
     }
 
-    static func normalizedLogin(_ rawLogin: String) -> String? {
+    nonisolated static func normalizedLogin(_ rawLogin: String) -> String? {
         let login = rawLogin
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
