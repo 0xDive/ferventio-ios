@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 @main
 struct FerventioApp: App {
@@ -23,6 +24,15 @@ struct FerventioApp: App {
                         @unknown default:
                             break
                         }
+                    }
+                }
+                .onReceive(
+                    NotificationCenter.default.publisher(
+                        for: UIApplication.didReceiveMemoryWarningNotification
+                    )
+                ) { _ in
+                    Task { @MainActor in
+                        ChatImagePipeline.shared.removeAllCachedImages()
                     }
                 }
         }

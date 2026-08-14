@@ -18,17 +18,22 @@ final class ChatImageAsset: NSObject {
 final class ChatImagePipeline {
     static let shared = ChatImagePipeline()
 
+    private struct InFlightLoad {
+        let id: UUID
+        let task: Task<ChatImageAsset?, Never>
+    }
+
     private static let maximumResponseBytes = 8 * 1024 * 1024
 
     // Chat emotes render at 28pt, or up to 112pt with wide modifiers.
-    // 384px covers the 3x Retina wide case without retaining source-sized frames.
-    private static let maximumDecodedPixelDimension = 384
+    // 336px exactly covers the 3x Retina wide case without retaining source-sized frames.
+    private static let maximumDecodedPixelDimension = 336
     private static let maximumAnimatedDecodedBytes = 32 * 1024 * 1024
     private static let maximumAnimationFrames = 360
 
     private let cache = NSCache<NSURL, ChatImageAsset>()
     private let session: URLSession
-    private var inFlight: [URL: Task<ChatImageAsset?, Never>] = [:]
+    private var inFlight: [URL: InFlightLoad] = [:]
 
     init(session: URLSession? = nil) {
         if let session {
@@ -54,16 +59,19 @@ final class ChatImagePipeline {
         if let cached = cache.object(forKey: url as NSURL) {
             return cached
         }
-        if let task = inFlight[url] {
-            return await task.value
+        if let load = inFlight[url] {
+            return await load.task.value
         }
 
+        let loadID = UUID()
         let task = Task { [session] in
             await Self.load(url: url, session: session)
         }
-        inFlight[url] = task
+        inFlight[url] = InFlightLoad(id: loadID, task: task)
         let asset = await task.value
-        inFlight[url] = nil
+        if inFlight[url]?.id == loadID {
+            inFlight[url] = nil
+        }
 
         if let asset {
             cache.setObject(asset, forKey: url as NSURL, cost: asset.decodedByteCost)
@@ -73,8 +81,8 @@ final class ChatImagePipeline {
 
     func removeAllCachedImages() {
         cache.removeAllObjects()
-        for task in inFlight.values {
-            task.cancel()
+        for load in inFlight.values {
+            load.task.cancel()
         }
         inFlight.removeAll()
     }
