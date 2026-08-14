@@ -3,8 +3,7 @@ import ImageIO
 import SwiftUI
 import UIKit
 
-@MainActor
-final class ChatImageAsset: NSObject {
+final class ChatImageAsset: NSObject, @unchecked Sendable {
     let image: UIImage
     let decodedByteCost: Int
 
@@ -14,15 +13,7 @@ final class ChatImageAsset: NSObject {
     }
 }
 
-@MainActor
-final class ChatImagePipeline {
-    static let shared = ChatImagePipeline()
-
-    private struct InFlightLoad {
-        let id: UUID
-        let task: Task<ChatImageAsset?, Never>
-    }
-
+private enum ChatImageLoader {
     private static let maximumResponseBytes = 8 * 1024 * 1024
 
     // Chat emotes render at 28pt, or up to 112pt with wide modifiers.
@@ -31,63 +22,11 @@ final class ChatImagePipeline {
     private static let maximumAnimatedDecodedBytes = 32 * 1024 * 1024
     private static let maximumAnimationFrames = 360
 
-    private let cache = NSCache<NSURL, ChatImageAsset>()
-    private let session: URLSession
-    private var inFlight: [URL: InFlightLoad] = [:]
-
-    init(session: URLSession? = nil) {
-        if let session {
-            self.session = session
-        } else {
-            let configuration = URLSessionConfiguration.default
-            configuration.requestCachePolicy = .returnCacheDataElseLoad
-            configuration.urlCache = URLCache(
-                memoryCapacity: 32 * 1024 * 1024,
-                diskCapacity: 128 * 1024 * 1024,
-                diskPath: "ferventio-chat-images"
-            )
-            self.session = URLSession(configuration: configuration)
-        }
-        cache.countLimit = 512
-        cache.totalCostLimit = 96 * 1024 * 1024
-    }
-
-    func image(for url: URL) async -> ChatImageAsset? {
-        guard url.scheme?.lowercased() == "https" else {
-            return nil
-        }
-        if let cached = cache.object(forKey: url as NSURL) {
-            return cached
-        }
-        if let load = inFlight[url] {
-            return await load.task.value
-        }
-
-        let loadID = UUID()
-        let task = Task { [session] in
-            await Self.load(url: url, session: session)
-        }
-        inFlight[url] = InFlightLoad(id: loadID, task: task)
-        let asset = await task.value
-        if inFlight[url]?.id == loadID {
-            inFlight[url] = nil
-        }
-
-        if let asset {
-            cache.setObject(asset, forKey: url as NSURL, cost: asset.decodedByteCost)
-        }
-        return asset
-    }
-
-    func removeAllCachedImages() {
-        cache.removeAllObjects()
-        for load in inFlight.values {
-            load.task.cancel()
-        }
-        inFlight.removeAll()
-    }
-
-    private static func load(url: URL, session: URLSession) async -> ChatImageAsset? {
+    static func load(
+        url: URL,
+        session: URLSession,
+        displayScale: CGFloat
+    ) async -> ChatImageAsset? {
         do {
             var request = URLRequest(url: url)
             request.httpMethod = "GET"
@@ -97,18 +36,22 @@ final class ChatImagePipeline {
             )
             request.timeoutInterval = 20
             let (data, response) = try await session.data(for: request)
-            guard let http = response as? HTTPURLResponse,
+            guard !Task.isCancelled,
+                  let http = response as? HTTPURLResponse,
                   (200..<300).contains(http.statusCode),
                   data.count <= maximumResponseBytes else {
                 return nil
             }
-            return decode(data)
+            return decode(data, displayScale: displayScale)
         } catch {
             return nil
         }
     }
 
-    private static func decode(_ data: Data) -> ChatImageAsset? {
+    private static func decode(
+        _ data: Data,
+        displayScale: CGFloat
+    ) -> ChatImageAsset? {
         let sourceOptions: [CFString: Any] = [
             kCGImageSourceShouldCache: false,
         ]
@@ -127,7 +70,7 @@ final class ChatImagePipeline {
 
         let firstImage = UIImage(
             cgImage: firstCGImage,
-            scale: UIScreen.main.scale,
+            scale: displayScale,
             orientation: .up
         )
         let firstCost = decodedCost(of: firstCGImage)
@@ -150,6 +93,9 @@ final class ChatImagePipeline {
         var cost = firstCost
 
         for index in 1..<frameCount {
+            guard !Task.isCancelled else {
+                return nil
+            }
             guard let cgImage = decodedFrame(source: source, index: index) else {
                 continue
             }
@@ -164,7 +110,7 @@ final class ChatImagePipeline {
             frames.append(
                 UIImage(
                     cgImage: cgImage,
-                    scale: UIScreen.main.scale,
+                    scale: displayScale,
                     orientation: .up
                 )
             )
@@ -240,6 +186,77 @@ final class ChatImagePipeline {
             }
         }
         return nil
+    }
+}
+
+@MainActor
+final class ChatImagePipeline {
+    static let shared = ChatImagePipeline()
+
+    private struct InFlightLoad {
+        let id: UUID
+        let task: Task<ChatImageAsset?, Never>
+    }
+
+    private let cache = NSCache<NSURL, ChatImageAsset>()
+    private let session: URLSession
+    private var inFlight: [URL: InFlightLoad] = [:]
+
+    init(session: URLSession? = nil) {
+        if let session {
+            self.session = session
+        } else {
+            let configuration = URLSessionConfiguration.default
+            configuration.requestCachePolicy = .returnCacheDataElseLoad
+            configuration.urlCache = URLCache(
+                memoryCapacity: 32 * 1024 * 1024,
+                diskCapacity: 128 * 1024 * 1024,
+                diskPath: "ferventio-chat-images"
+            )
+            self.session = URLSession(configuration: configuration)
+        }
+        cache.countLimit = 512
+        cache.totalCostLimit = 96 * 1024 * 1024
+    }
+
+    func image(for url: URL) async -> ChatImageAsset? {
+        guard url.scheme?.lowercased() == "https" else {
+            return nil
+        }
+        if let cached = cache.object(forKey: url as NSURL) {
+            return cached
+        }
+        if let load = inFlight[url] {
+            return await load.task.value
+        }
+
+        let loadID = UUID()
+        let displayScale = UIScreen.main.scale
+        let task = Task { [session] in
+            await ChatImageLoader.load(
+                url: url,
+                session: session,
+                displayScale: displayScale
+            )
+        }
+        inFlight[url] = InFlightLoad(id: loadID, task: task)
+        let asset = await task.value
+        if inFlight[url]?.id == loadID {
+            inFlight[url] = nil
+        }
+
+        if let asset {
+            cache.setObject(asset, forKey: url as NSURL, cost: asset.decodedByteCost)
+        }
+        return asset
+    }
+
+    func removeAllCachedImages() {
+        cache.removeAllObjects()
+        for load in inFlight.values {
+            load.task.cancel()
+        }
+        inFlight.removeAll()
     }
 }
 
