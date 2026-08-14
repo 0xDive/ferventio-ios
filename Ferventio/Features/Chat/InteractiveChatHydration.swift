@@ -122,18 +122,12 @@ extension ChatStore {
 
         if let poll = snapshot.poll,
            poll.channelID == channelID {
-            interactiveOverlayState = InteractiveChatOverlayReducer.reduce(
-                state: interactiveOverlayState,
-                event: .pollSnapshot(poll)
-            )
+            apply(.poll(poll))
         }
 
         if let prediction = snapshot.prediction,
            prediction.channelID == channelID {
-            interactiveOverlayState = InteractiveChatOverlayReducer.reduce(
-                state: interactiveOverlayState,
-                event: .predictionSnapshot(prediction)
-            )
+            apply(.prediction(prediction))
         }
     }
 
