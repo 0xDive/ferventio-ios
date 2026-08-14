@@ -7,10 +7,11 @@ public struct ThirdPartyEmoteDefinition: Codable, Equatable, Sendable, Identifia
     public let animated: Bool
     public let imageURL: String?
     public let zeroWidth: Bool
+    public let modifier: Bool
+    public let modifierPrefix: Bool
+    public let modifierFlags: Int
 
-    public var id: String {
-        "\(provider):\(emoteID)"
-    }
+    public var id: String { "\(provider):\(emoteID)" }
 
     public init(
         code: String,
@@ -18,7 +19,10 @@ public struct ThirdPartyEmoteDefinition: Codable, Equatable, Sendable, Identifia
         provider: String,
         animated: Bool,
         imageURL: String?,
-        zeroWidth: Bool = false
+        zeroWidth: Bool = false,
+        modifier: Bool = false,
+        modifierPrefix: Bool = false,
+        modifierFlags: Int = 0
     ) {
         self.code = code
         self.emoteID = emoteID
@@ -26,6 +30,9 @@ public struct ThirdPartyEmoteDefinition: Codable, Equatable, Sendable, Identifia
         self.animated = animated
         self.imageURL = imageURL
         self.zeroWidth = zeroWidth
+        self.modifier = modifier
+        self.modifierPrefix = modifierPrefix
+        self.modifierFlags = modifierFlags
     }
 }
 
@@ -42,17 +49,9 @@ public struct ThirdPartyEmoteCatalog: Equatable, Sendable {
         byCode = resolved
     }
 
-    public var isEmpty: Bool {
-        byCode.isEmpty
-    }
-
-    public var count: Int {
-        byCode.count
-    }
-
-    public func emote(for code: String) -> ThirdPartyEmoteDefinition? {
-        byCode[code]
-    }
+    public var isEmpty: Bool { byCode.isEmpty }
+    public var count: Int { byCode.count }
+    public func emote(for code: String) -> ThirdPartyEmoteDefinition? { byCode[code] }
 
     public static func merging(
         global: [ThirdPartyEmoteDefinition],
@@ -74,14 +73,9 @@ public enum ThirdPartyEmoteParser {
         to fragments: [ChatFragment],
         catalog: ThirdPartyEmoteCatalog
     ) -> [ChatFragment] {
-        guard !catalog.isEmpty else {
-            return fragments
-        }
-
+        guard !catalog.isEmpty else { return fragments }
         return fragments.flatMap { fragment in
-            guard case let .text(text) = fragment else {
-                return [fragment]
-            }
+            guard case let .text(text) = fragment else { return [fragment] }
             return parseTextFragment(text, catalog: catalog)
         }
     }
@@ -90,9 +84,7 @@ public enum ThirdPartyEmoteParser {
         _ text: String,
         catalog: ThirdPartyEmoteCatalog
     ) -> [ChatFragment] {
-        guard !text.isEmpty else {
-            return [.text(text)]
-        }
+        guard !text.isEmpty else { return [.text(text)] }
 
         var result: [ChatFragment] = []
         var current = ""
@@ -102,11 +94,17 @@ public enum ThirdPartyEmoteParser {
             guard !current.isEmpty else { return }
             if currentIsWhitespace == false,
                let emote = catalog.emote(for: current) {
+                let provider = emote.modifier && emote.provider.caseInsensitiveCompare("ffz") == .orderedSame
+                    ? FfzModifierFragmentMetadata.providerMarker(
+                        prefix: emote.modifierPrefix,
+                        flags: emote.modifierFlags
+                    )
+                    : emote.provider
                 result.append(
                     .thirdPartyEmote(
                         text: current,
                         emoteID: emote.emoteID,
-                        provider: emote.provider,
+                        provider: provider,
                         animated: emote.animated,
                         imageURL: emote.imageURL,
                         zeroWidth: emote.zeroWidth
@@ -120,13 +118,33 @@ public enum ThirdPartyEmoteParser {
 
         for character in text {
             let isWhitespace = character.isWhitespace
-            if let currentIsWhitespace, currentIsWhitespace != isWhitespace {
-                flush()
-            }
+            if let currentIsWhitespace, currentIsWhitespace != isWhitespace { flush() }
             currentIsWhitespace = isWhitespace
             current.append(character)
         }
         flush()
         return result
+    }
+}
+
+public enum FfzModifierFragmentMetadata {
+    private static let prefix = "ffz-modifier:"
+
+    public static func providerMarker(prefix isPrefix: Bool, flags: Int) -> String {
+        "\(prefix)\(isPrefix ? "prefix" : "suffix"):\(max(0, flags))"
+    }
+
+    public static func parse(provider: String) -> (prefix: Bool, flags: Int)? {
+        guard provider.hasPrefix(prefix) else { return nil }
+        let payload = provider.dropFirst(prefix.count)
+        let parts = payload.split(separator: ":", omittingEmptySubsequences: false)
+        guard parts.count == 2,
+              let flags = Int(parts[1]),
+              flags >= 0 else { return nil }
+        switch parts[0] {
+        case "prefix": return (true, flags)
+        case "suffix": return (false, flags)
+        default: return nil
+        }
     }
 }
