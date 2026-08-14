@@ -128,9 +128,9 @@ struct ChatView: View {
                     ProgressView()
                 } else {
                     Image(systemName: "arrow.right.circle.fill")
-                        .accessibilityLabel(Text("chat.connect"))
                 }
             }
+            .accessibilityLabel(Text("chat.connect"))
             .buttonStyle(.borderless)
             .disabled(
                 store.connectionState == .connecting
@@ -372,9 +372,9 @@ struct ChatView: View {
                         ProgressView()
                     } else {
                         Image(systemName: "paperplane.fill")
-                            .accessibilityLabel(Text("chat.send"))
                     }
                 }
+                .accessibilityLabel(Text("chat.send"))
                 .buttonStyle(.borderless)
                 .disabled(!store.canSend)
             }
