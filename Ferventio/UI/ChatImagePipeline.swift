@@ -152,6 +152,8 @@ final class ChatImagePipeline {
 }
 
 struct ChatUIImageView: UIViewRepresentable {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     let image: UIImage
 
     func makeUIView(context: Context) -> UIImageView {
@@ -162,12 +164,15 @@ struct ChatUIImageView: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: UIImageView, context: Context) {
-        if uiView.image !== image {
+        let displayedImage = reduceMotion ? (image.images?.first ?? image) : image
+        if uiView.image !== displayedImage {
             uiView.stopAnimating()
-            uiView.image = image
+            uiView.image = displayedImage
         }
-        if image.images?.isEmpty == false {
+        if !reduceMotion && image.images?.isEmpty == false {
             uiView.startAnimating()
+        } else {
+            uiView.stopAnimating()
         }
     }
 }
