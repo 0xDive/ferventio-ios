@@ -19,8 +19,16 @@ final class ChatImagePipeline {
     static let shared = ChatImagePipeline()
 
     private static let maximumResponseBytes = 8 * 1024 * 1024
+
+    // Chat emotes render at 28pt, or up to 112pt with wide modifiers.
+    // 384px covers the 3x Retina wide case without retaining source-sized frames.
+    private static let maximumDecodedPixelDimension = 384
+    private static let maximumAnimatedDecodedBytes = 32 * 1024 * 1024
+    private static let maximumAnimationFrames = 360
+
     private let cache = NSCache<NSURL, ChatImageAsset>()
     private let session: URLSession
+    private var inFlight: [URL: Task<ChatImageAsset?, Never>] = [:]
 
     init(session: URLSession? = nil) {
         if let session {
@@ -46,67 +54,143 @@ final class ChatImagePipeline {
         if let cached = cache.object(forKey: url as NSURL) {
             return cached
         }
+        if let task = inFlight[url] {
+            return await task.value
+        }
 
+        let task = Task { [session] in
+            await Self.load(url: url, session: session)
+        }
+        inFlight[url] = task
+        let asset = await task.value
+        inFlight[url] = nil
+
+        if let asset {
+            cache.setObject(asset, forKey: url as NSURL, cost: asset.decodedByteCost)
+        }
+        return asset
+    }
+
+    func removeAllCachedImages() {
+        cache.removeAllObjects()
+        for task in inFlight.values {
+            task.cancel()
+        }
+        inFlight.removeAll()
+    }
+
+    private static func load(url: URL, session: URLSession) async -> ChatImageAsset? {
         do {
             var request = URLRequest(url: url)
             request.httpMethod = "GET"
-            request.setValue("image/avif,image/webp,image/gif,image/png,image/*;q=0.8", forHTTPHeaderField: "Accept")
+            request.setValue(
+                "image/avif,image/webp,image/gif,image/png,image/*;q=0.8",
+                forHTTPHeaderField: "Accept"
+            )
             request.timeoutInterval = 20
             let (data, response) = try await session.data(for: request)
             guard let http = response as? HTTPURLResponse,
                   (200..<300).contains(http.statusCode),
-                  data.count <= Self.maximumResponseBytes,
-                  let asset = Self.decode(data) else {
+                  data.count <= maximumResponseBytes else {
                 return nil
             }
-            cache.setObject(asset, forKey: url as NSURL, cost: asset.decodedByteCost)
-            return asset
+            return decode(data)
         } catch {
             return nil
         }
     }
 
-    func removeAllCachedImages() {
-        cache.removeAllObjects()
-    }
-
     private static func decode(_ data: Data) -> ChatImageAsset? {
-        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else {
-            return UIImage(data: data).map { ChatImageAsset(image: $0, decodedByteCost: data.count) }
+        let sourceOptions: [CFString: Any] = [
+            kCGImageSourceShouldCache: false,
+        ]
+        guard let source = CGImageSourceCreateWithData(
+            data as CFData,
+            sourceOptions as CFDictionary
+        ) else {
+            return nil
         }
 
         let frameCount = CGImageSourceGetCount(source)
-        guard frameCount > 1 else {
-            guard let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
-                return UIImage(data: data).map { ChatImageAsset(image: $0, decodedByteCost: data.count) }
-            }
-            let image = UIImage(cgImage: cgImage, scale: UIScreen.main.scale, orientation: .up)
-            let cost = max(1, cgImage.width * cgImage.height * 4)
-            return ChatImageAsset(image: image, decodedByteCost: cost)
-        }
-
-        var frames: [UIImage] = []
-        frames.reserveCapacity(frameCount)
-        var duration: TimeInterval = 0
-        var cost = 0
-
-        for index in 0..<frameCount {
-            guard let cgImage = CGImageSourceCreateImageAtIndex(source, index, nil) else {
-                continue
-            }
-            frames.append(UIImage(cgImage: cgImage, scale: UIScreen.main.scale, orientation: .up))
-            duration += frameDuration(source: source, index: index)
-            cost += max(1, cgImage.width * cgImage.height * 4)
-        }
-
-        guard let first = frames.first else {
+        guard frameCount > 0,
+              let firstCGImage = decodedFrame(source: source, index: 0) else {
             return nil
         }
+
+        let firstImage = UIImage(
+            cgImage: firstCGImage,
+            scale: UIScreen.main.scale,
+            orientation: .up
+        )
+        let firstCost = decodedCost(of: firstCGImage)
+        guard frameCount > 1 else {
+            return ChatImageAsset(
+                image: firstImage,
+                decodedByteCost: max(firstCost, data.count)
+            )
+        }
+        guard frameCount <= maximumAnimationFrames else {
+            return ChatImageAsset(
+                image: firstImage,
+                decodedByteCost: max(firstCost, data.count)
+            )
+        }
+
+        var frames: [UIImage] = [firstImage]
+        frames.reserveCapacity(min(frameCount, 64))
+        var duration = frameDuration(source: source, index: 0)
+        var cost = firstCost
+
+        for index in 1..<frameCount {
+            guard let cgImage = decodedFrame(source: source, index: index) else {
+                continue
+            }
+            let frameCost = decodedCost(of: cgImage)
+            guard frameCost <= maximumAnimatedDecodedBytes - min(cost, maximumAnimatedDecodedBytes) else {
+                return ChatImageAsset(
+                    image: firstImage,
+                    decodedByteCost: max(firstCost, data.count)
+                )
+            }
+
+            frames.append(
+                UIImage(
+                    cgImage: cgImage,
+                    scale: UIScreen.main.scale,
+                    orientation: .up
+                )
+            )
+            duration += frameDuration(source: source, index: index)
+            cost += frameCost
+        }
+
         if duration <= 0 {
             duration = Double(frames.count) * 0.1
         }
-        let animated = UIImage.animatedImage(with: frames, duration: duration) ?? first
+        let animated = UIImage.animatedImage(with: frames, duration: duration) ?? firstImage
         return ChatImageAsset(image: animated, decodedByteCost: max(cost, data.count))
+    }
+
+    private static func decodedFrame(
+        source: CGImageSource,
+        index: Int
+    ) -> CGImage? {
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceThumbnailMaxPixelSize: maximumDecodedPixelDimension,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+        ]
+        return CGImageSourceCreateThumbnailAtIndex(
+            source,
+            index,
+            options as CFDictionary
+        )
+    }
+
+    private static func decodedCost(of image: CGImage) -> Int {
+        let (cost, overflow) = image.bytesPerRow.multipliedReportingOverflow(by: image.height)
+        return overflow ? maximumAnimatedDecodedBytes : max(1, cost)
     }
 
     private static func frameDuration(
