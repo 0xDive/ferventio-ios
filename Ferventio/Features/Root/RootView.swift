@@ -195,6 +195,7 @@ struct RootView: View {
                     Image(systemName: "gearshape")
                         .accessibilityLabel(Text(settingsLocalized("open")))
                 }
+                .keyboardShortcut(",", modifiers: .command)
 
                 Button("auth.sign_out", role: .destructive) {
                     Task {
@@ -222,6 +223,7 @@ struct RootView: View {
                         .accessibilityLabel(Text("chat.workspace.add"))
                 }
                 .buttonStyle(.borderless)
+                .keyboardShortcut("n", modifiers: .command)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
