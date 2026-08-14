@@ -76,6 +76,32 @@ struct ChatWorkspaceRegistryTests {
     }
 
     @Test
+    func replacePreservesMatchingWorkspaceIDsAndPersistsImportedSelection() throws {
+        let harness = try makeHarness()
+        defer { harness.cleanup() }
+        var store = ChatWorkspaceRegistryStore(persistence: harness.persistence)
+
+        _ = try #require(openedWorkspace(store.open(login: "alpha")))
+        let beta = try #require(openedWorkspace(store.open(login: "beta")))
+        _ = try #require(openedWorkspace(store.open(login: "gamma")))
+
+        let snapshot = store.replace(
+            logins: [" BETA ", "delta", "beta"],
+            selectedLogin: "DELTA"
+        )
+
+        #expect(snapshot.workspaces.count == 2)
+        #expect(snapshot.workspaces[0] == beta)
+        #expect(snapshot.workspaces[1].login == "delta")
+        #expect(snapshot.workspaces[1].id != beta.id)
+        #expect(snapshot.activeWorkspaceID == snapshot.workspaces[1].id)
+
+        store = ChatWorkspaceRegistryStore(persistence: harness.persistence)
+        #expect(store.workspaces == snapshot.workspaces)
+        #expect(store.activeWorkspaceID == snapshot.activeWorkspaceID)
+    }
+
+    @Test
     func invalidOrUnsupportedStoredEnvelopeFallsBackToEmptyRegistry() throws {
         let harness = try makeHarness()
         defer { harness.cleanup() }

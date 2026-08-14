@@ -160,6 +160,42 @@ final class ChatWorkspaceRegistryStore {
         return true
     }
 
+    @discardableResult
+    func replace(
+        logins rawLogins: [String],
+        selectedLogin rawSelectedLogin: String?
+    ) -> ChatWorkspaceRegistrySnapshot {
+        let existingByLogin = Dictionary(
+            uniqueKeysWithValues: workspaces.map { ($0.login, $0) }
+        )
+        var seenLogins = Set<String>()
+        var replacement: [ChatWorkspace] = []
+        replacement.reserveCapacity(min(rawLogins.count, Self.maximumWorkspaces))
+
+        for rawLogin in rawLogins {
+            guard replacement.count < Self.maximumWorkspaces,
+                  let login = Self.normalizedLogin(rawLogin),
+                  seenLogins.insert(login).inserted else {
+                continue
+            }
+            replacement.append(existingByLogin[login] ?? ChatWorkspace(login: login))
+        }
+
+        let selectedLogin = rawSelectedLogin.flatMap(Self.normalizedLogin)
+        let selectedID = selectedLogin.flatMap { login in
+            replacement.first(where: { $0.login == login })?.id
+        } ?? replacement.first?.id
+
+        workspaces = replacement
+        activeWorkspaceID = selectedID
+        persist()
+
+        return ChatWorkspaceRegistrySnapshot(
+            workspaces: workspaces,
+            activeWorkspaceID: activeWorkspaceID
+        )
+    }
+
     static func normalizedLogin(_ rawLogin: String) -> String? {
         let login = rawLogin
             .trimmingCharacters(in: .whitespacesAndNewlines)
