@@ -75,19 +75,39 @@ final class AppEnvironment {
     }
 
     var canExecuteNuke: Bool {
-        guard let grant = authenticationGrant,
-              chatStore.channel != nil else {
-            return false
-        }
-        return grant.accessLease.session.scopes.contains(TwitchNukeExecutionService.requiredScope)
+        canExecuteNuke(channel: chatStore.channel)
     }
 
     var canManagePolls: Bool {
-        canManageInteractive(scope: "channel:manage:polls")
+        canManageInteractive(
+            scope: "channel:manage:polls",
+            channel: chatStore.channel
+        )
     }
 
     var canManagePredictions: Bool {
-        canManageInteractive(scope: "channel:manage:predictions")
+        canManageInteractive(
+            scope: "channel:manage:predictions",
+            channel: chatStore.channel
+        )
+    }
+
+    func canExecuteNuke(in runtime: ChatWorkspaceRuntime) -> Bool {
+        canExecuteNuke(channel: runtime.chatStore.channel)
+    }
+
+    func canManagePolls(in runtime: ChatWorkspaceRuntime) -> Bool {
+        canManageInteractive(
+            scope: "channel:manage:polls",
+            channel: runtime.chatStore.channel
+        )
+    }
+
+    func canManagePredictions(in runtime: ChatWorkspaceRuntime) -> Bool {
+        canManageInteractive(
+            scope: "channel:manage:predictions",
+            channel: runtime.chatStore.channel
+        )
     }
 
     func start() async {
@@ -146,101 +166,76 @@ final class AppEnvironment {
     }
 
     func connectChat() async {
-        guard let grant = authenticationGrant else {
-            chatStore.failChannelResolution()
-            return
-        }
-        let login = chatStore.channelInput.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !login.isEmpty else {
-            chatStore.failChannelResolution()
-            return
-        }
+        await connectChat(
+            store: chatStore,
+            assets: chatAssetStore,
+            mutationStore: interactiveMutationStore
+        )
+    }
 
-        do {
-            let channel = try await twitchBootstrap.resolveChannel(login: login, for: grant)
-            chatAssetStore.reset()
-            interactiveMutationStore.clear()
-            await chatStore.connect(
-                channel: channel,
-                lease: grant.accessLease,
-                currentUser: currentUser
-            )
-            guard chatStore.connectionState == .connected else {
-                return
-            }
-
-            async let badges: Void = chatAssetStore.loadBadges(
-                clientID: grant.accessLease.session.clientID,
-                accessToken: grant.accessLease.accessToken,
-                broadcasterID: channel.id
-            )
-            async let thirdPartyEmotes: Void = chatAssetStore.loadThirdPartyEmotes(
-                twitchUserID: channel.id
-            )
-            async let interactiveSnapshot = interactiveChatHydrator.load(
-                channel: channel,
-                lease: grant.accessLease
-            )
-            let (_, _, snapshot) = await (badges, thirdPartyEmotes, interactiveSnapshot)
-
-            guard chatStore.channel?.id == channel.id else {
-                return
-            }
-            chatStore.setThirdPartyEmoteCatalog(chatAssetStore.thirdPartyEmoteCatalog)
-            chatStore.applyHydratedInteractiveOverlays(snapshot)
-        } catch {
-            chatStore.failChannelResolution()
-        }
+    func connectChat(in runtime: ChatWorkspaceRuntime) async {
+        await connectChat(
+            store: runtime.chatStore,
+            assets: runtime.chatAssetStore,
+            mutationStore: runtime.interactiveMutationStore
+        )
     }
 
     func createPoll(_ draft: PollDraft) async -> Bool {
-        guard let grant = authenticationGrant,
-              let channel = chatStore.channel else {
-            return false
-        }
-        let success = await interactiveMutationStore.createPoll(
-            channel: channel,
-            lease: grant.accessLease,
-            draft: draft
+        await createPoll(
+            draft,
+            store: chatStore,
+            mutationStore: interactiveMutationStore
         )
-        if success {
-            await refreshInteractiveOverlays(channel: channel, grant: grant)
-        }
-        return success
+    }
+
+    func createPoll(_ draft: PollDraft, in runtime: ChatWorkspaceRuntime) async -> Bool {
+        await createPoll(
+            draft,
+            store: runtime.chatStore,
+            mutationStore: runtime.interactiveMutationStore
+        )
     }
 
     func endPoll(_ poll: PollOverlay, status: PollEndStatus) async -> Bool {
-        guard let grant = authenticationGrant,
-              let channel = chatStore.channel,
-              poll.channelID == channel.id else {
-            return false
-        }
-        let success = await interactiveMutationStore.endPoll(
-            channel: channel,
-            lease: grant.accessLease,
-            pollID: poll.id,
-            status: status
+        await endPoll(
+            poll,
+            status: status,
+            store: chatStore,
+            mutationStore: interactiveMutationStore
         )
-        if success {
-            await refreshInteractiveOverlays(channel: channel, grant: grant)
-        }
-        return success
+    }
+
+    func endPoll(
+        _ poll: PollOverlay,
+        status: PollEndStatus,
+        in runtime: ChatWorkspaceRuntime
+    ) async -> Bool {
+        await endPoll(
+            poll,
+            status: status,
+            store: runtime.chatStore,
+            mutationStore: runtime.interactiveMutationStore
+        )
     }
 
     func createPrediction(_ draft: PredictionDraft) async -> Bool {
-        guard let grant = authenticationGrant,
-              let channel = chatStore.channel else {
-            return false
-        }
-        let success = await interactiveMutationStore.createPrediction(
-            channel: channel,
-            lease: grant.accessLease,
-            draft: draft
+        await createPrediction(
+            draft,
+            store: chatStore,
+            mutationStore: interactiveMutationStore
         )
-        if success {
-            await refreshInteractiveOverlays(channel: channel, grant: grant)
-        }
-        return success
+    }
+
+    func createPrediction(
+        _ draft: PredictionDraft,
+        in runtime: ChatWorkspaceRuntime
+    ) async -> Bool {
+        await createPrediction(
+            draft,
+            store: runtime.chatStore,
+            mutationStore: runtime.interactiveMutationStore
+        )
     }
 
     func endPrediction(
@@ -248,22 +243,28 @@ final class AppEnvironment {
         status: PredictionEndStatus,
         winningOutcomeID: String? = nil
     ) async -> Bool {
-        guard let grant = authenticationGrant,
-              let channel = chatStore.channel,
-              prediction.channelID == channel.id else {
-            return false
-        }
-        let success = await interactiveMutationStore.endPrediction(
-            channel: channel,
-            lease: grant.accessLease,
-            predictionID: prediction.id,
+        await endPrediction(
+            prediction,
             status: status,
-            winningOutcomeID: winningOutcomeID
+            winningOutcomeID: winningOutcomeID,
+            store: chatStore,
+            mutationStore: interactiveMutationStore
         )
-        if success {
-            await refreshInteractiveOverlays(channel: channel, grant: grant)
-        }
-        return success
+    }
+
+    func endPrediction(
+        _ prediction: PredictionOverlay,
+        status: PredictionEndStatus,
+        winningOutcomeID: String? = nil,
+        in runtime: ChatWorkspaceRuntime
+    ) async -> Bool {
+        await endPrediction(
+            prediction,
+            status: status,
+            winningOutcomeID: winningOutcomeID,
+            store: runtime.chatStore,
+            mutationStore: runtime.interactiveMutationStore
+        )
     }
 
     func loadUserProfile(for author: ChatAuthor) async -> TwitchUser? {
@@ -274,51 +275,33 @@ final class AppEnvironment {
     }
 
     func executeNuke(plan: NukeExecutionPlan) async throws -> NukeExecutionResult {
-        guard let grant = authenticationGrant else {
-            throw NukeExecutionServiceError.notAuthenticated
-        }
-        guard let channel = chatStore.channel else {
-            throw NukeExecutionServiceError.missingChannel
-        }
-        guard grant.accessLease.session.scopes.contains(TwitchNukeExecutionService.requiredScope) else {
-            throw NukeExecutionServiceError.missingScope
-        }
-        return try await nukeExecutor.execute(
-            plan: plan,
-            broadcasterID: channel.id,
-            grant: grant
-        )
+        try await executeNuke(plan: plan, channel: chatStore.channel)
+    }
+
+    func executeNuke(
+        plan: NukeExecutionPlan,
+        in runtime: ChatWorkspaceRuntime
+    ) async throws -> NukeExecutionResult {
+        try await executeNuke(plan: plan, channel: runtime.chatStore.channel)
     }
 
     func canTimeoutUser(_ author: ChatAuthor) -> Bool {
-        guard canExecuteNuke,
-              let session,
-              !author.id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              author.id != session.userID else {
-            return false
-        }
-        let badgeSetIDs = Set(author.badges.map(\.setID))
-        return badgeSetIDs.isDisjoint(with: Self.protectedModerationBadgeSetIDs)
+        canTimeoutUser(author, channel: chatStore.channel)
+    }
+
+    func canTimeoutUser(_ author: ChatAuthor, in runtime: ChatWorkspaceRuntime) -> Bool {
+        canTimeoutUser(author, channel: runtime.chatStore.channel)
     }
 
     func timeoutUserFromCard(_ author: ChatAuthor) async throws -> NukeExecutionResult {
-        guard canTimeoutUser(author) else {
-            throw NukeExecutionServiceError.missingTargetUserID
-        }
-        let user = NukeTargetUser(
-            userID: author.id,
-            userLogin: author.login,
-            userDisplayName: author.displayName
-        )
-        let plan = NukeExecutionPlan(
-            query: "manual:user-card-timeout",
-            matchMode: .plainText,
-            caseSensitive: false,
-            previewedAtMilliseconds: Int64(Date().timeIntervalSince1970 * 1_000),
-            targetUsers: [user],
-            targetMessageIDs: []
-        )
-        return try await executeNuke(plan: plan)
+        try await timeoutUserFromCard(author, channel: chatStore.channel)
+    }
+
+    func timeoutUserFromCard(
+        _ author: ChatAuthor,
+        in runtime: ChatWorkspaceRuntime
+    ) async throws -> NukeExecutionResult {
+        try await timeoutUserFromCard(author, channel: runtime.chatStore.channel)
     }
 
     func chatHistoryPreferences() -> ChatHistoryPreferences {
@@ -358,6 +341,219 @@ final class AppEnvironment {
         await chatStore.resumeIfNeeded()
     }
 
+    private func connectChat(
+        store: ChatStore,
+        assets: ChatAssetStore,
+        mutationStore: InteractiveChatMutationStore
+    ) async {
+        guard let grant = authenticationGrant else {
+            store.failChannelResolution()
+            return
+        }
+        let login = store.channelInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !login.isEmpty else {
+            store.failChannelResolution()
+            return
+        }
+
+        do {
+            let channel = try await twitchBootstrap.resolveChannel(login: login, for: grant)
+            assets.reset()
+            mutationStore.clear()
+            await store.connect(
+                channel: channel,
+                lease: grant.accessLease,
+                currentUser: currentUser
+            )
+            guard store.connectionState == .connected else {
+                return
+            }
+
+            async let badges: Void = assets.loadBadges(
+                clientID: grant.accessLease.session.clientID,
+                accessToken: grant.accessLease.accessToken,
+                broadcasterID: channel.id
+            )
+            async let thirdPartyEmotes: Void = assets.loadThirdPartyEmotes(
+                twitchUserID: channel.id
+            )
+            async let interactiveSnapshot = interactiveChatHydrator.load(
+                channel: channel,
+                lease: grant.accessLease
+            )
+            let (_, _, snapshot) = await (badges, thirdPartyEmotes, interactiveSnapshot)
+
+            guard store.channel?.id == channel.id else {
+                return
+            }
+            store.setThirdPartyEmoteCatalog(assets.thirdPartyEmoteCatalog)
+            store.applyHydratedInteractiveOverlays(snapshot)
+        } catch {
+            store.failChannelResolution()
+        }
+    }
+
+    private func createPoll(
+        _ draft: PollDraft,
+        store: ChatStore,
+        mutationStore: InteractiveChatMutationStore
+    ) async -> Bool {
+        guard let grant = authenticationGrant,
+              let channel = store.channel else {
+            return false
+        }
+        let success = await mutationStore.createPoll(
+            channel: channel,
+            lease: grant.accessLease,
+            draft: draft
+        )
+        if success {
+            await refreshInteractiveOverlays(
+                channel: channel,
+                grant: grant,
+                store: store
+            )
+        }
+        return success
+    }
+
+    private func endPoll(
+        _ poll: PollOverlay,
+        status: PollEndStatus,
+        store: ChatStore,
+        mutationStore: InteractiveChatMutationStore
+    ) async -> Bool {
+        guard let grant = authenticationGrant,
+              let channel = store.channel,
+              poll.channelID == channel.id else {
+            return false
+        }
+        let success = await mutationStore.endPoll(
+            channel: channel,
+            lease: grant.accessLease,
+            pollID: poll.id,
+            status: status
+        )
+        if success {
+            await refreshInteractiveOverlays(
+                channel: channel,
+                grant: grant,
+                store: store
+            )
+        }
+        return success
+    }
+
+    private func createPrediction(
+        _ draft: PredictionDraft,
+        store: ChatStore,
+        mutationStore: InteractiveChatMutationStore
+    ) async -> Bool {
+        guard let grant = authenticationGrant,
+              let channel = store.channel else {
+            return false
+        }
+        let success = await mutationStore.createPrediction(
+            channel: channel,
+            lease: grant.accessLease,
+            draft: draft
+        )
+        if success {
+            await refreshInteractiveOverlays(
+                channel: channel,
+                grant: grant,
+                store: store
+            )
+        }
+        return success
+    }
+
+    private func endPrediction(
+        _ prediction: PredictionOverlay,
+        status: PredictionEndStatus,
+        winningOutcomeID: String?,
+        store: ChatStore,
+        mutationStore: InteractiveChatMutationStore
+    ) async -> Bool {
+        guard let grant = authenticationGrant,
+              let channel = store.channel,
+              prediction.channelID == channel.id else {
+            return false
+        }
+        let success = await mutationStore.endPrediction(
+            channel: channel,
+            lease: grant.accessLease,
+            predictionID: prediction.id,
+            status: status,
+            winningOutcomeID: winningOutcomeID
+        )
+        if success {
+            await refreshInteractiveOverlays(
+                channel: channel,
+                grant: grant,
+                store: store
+            )
+        }
+        return success
+    }
+
+    private func executeNuke(
+        plan: NukeExecutionPlan,
+        channel: ChatChannel?
+    ) async throws -> NukeExecutionResult {
+        guard let grant = authenticationGrant else {
+            throw NukeExecutionServiceError.notAuthenticated
+        }
+        guard let channel else {
+            throw NukeExecutionServiceError.missingChannel
+        }
+        guard grant.accessLease.session.scopes.contains(TwitchNukeExecutionService.requiredScope) else {
+            throw NukeExecutionServiceError.missingScope
+        }
+        return try await nukeExecutor.execute(
+            plan: plan,
+            broadcasterID: channel.id,
+            grant: grant
+        )
+    }
+
+    private func canTimeoutUser(
+        _ author: ChatAuthor,
+        channel: ChatChannel?
+    ) -> Bool {
+        guard canExecuteNuke(channel: channel),
+              let session,
+              !author.id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              author.id != session.userID else {
+            return false
+        }
+        let badgeSetIDs = Set(author.badges.map(\.setID))
+        return badgeSetIDs.isDisjoint(with: Self.protectedModerationBadgeSetIDs)
+    }
+
+    private func timeoutUserFromCard(
+        _ author: ChatAuthor,
+        channel: ChatChannel?
+    ) async throws -> NukeExecutionResult {
+        guard canTimeoutUser(author, channel: channel) else {
+            throw NukeExecutionServiceError.missingTargetUserID
+        }
+        let user = NukeTargetUser(
+            userID: author.id,
+            userLogin: author.login,
+            userDisplayName: author.displayName
+        )
+        let plan = NukeExecutionPlan(
+            query: "manual:user-card-timeout",
+            matchMode: .plainText,
+            caseSensitive: false,
+            previewedAtMilliseconds: Int64(Date().timeIntervalSince1970 * 1_000),
+            targetUsers: [user],
+            targetMessageIDs: []
+        )
+        return try await executeNuke(plan: plan, channel: channel)
+    }
+
     private func apply(_ grant: AuthenticationGrant) {
         authenticationGrant = grant
         session = grant.accessLease.session
@@ -371,21 +567,33 @@ final class AppEnvironment {
 
     private func refreshInteractiveOverlays(
         channel: ChatChannel,
-        grant: AuthenticationGrant
+        grant: AuthenticationGrant,
+        store: ChatStore
     ) async {
         let snapshot = await interactiveChatHydrator.load(
             channel: channel,
             lease: grant.accessLease
         )
-        guard chatStore.channel?.id == channel.id else {
+        guard store.channel?.id == channel.id else {
             return
         }
-        chatStore.applyHydratedInteractiveOverlays(snapshot)
+        store.applyHydratedInteractiveOverlays(snapshot)
     }
 
-    private func canManageInteractive(scope: String) -> Bool {
+    private func canExecuteNuke(channel: ChatChannel?) -> Bool {
         guard let grant = authenticationGrant,
-              let channel = chatStore.channel,
+              channel != nil else {
+            return false
+        }
+        return grant.accessLease.session.scopes.contains(TwitchNukeExecutionService.requiredScope)
+    }
+
+    private func canManageInteractive(
+        scope: String,
+        channel: ChatChannel?
+    ) -> Bool {
+        guard let grant = authenticationGrant,
+              let channel,
               channel.id == grant.accessLease.session.userID else {
             return false
         }
