@@ -232,28 +232,18 @@ struct ChatView: View {
                     }
                 }
                 .onChange(of: visibleMessages.last?.id, initial: true) { previousID, messageID in
-                    guard let messageID else { return }
+                    guard messageID != nil else { return }
                     let shouldFollowLive = !hasPositionedInitialFeed
                         || feedScrollPosition == Self.feedBottomID
+                    unreadLiveMessageCount = ChatUnreadLiveCounter.updatedCount(
+                        currentCount: unreadLiveMessageCount,
+                        previousLastMessageID: previousID,
+                        visibleMessages: visibleMessages,
+                        isFollowingLive: shouldFollowLive
+                    )
                     if shouldFollowLive {
                         proxy.scrollTo(Self.feedBottomID, anchor: .bottom)
                         feedScrollPosition = Self.feedBottomID
-                        unreadLiveMessageCount = 0
-                    } else if let previousID, previousID != messageID {
-                        let newMessageCount: Int
-                        if let previousIndex = visibleMessages.lastIndex(where: { $0.id == previousID }) {
-                            let nextIndex = visibleMessages.index(after: previousIndex)
-                            newMessageCount = visibleMessages.distance(
-                                from: nextIndex,
-                                to: visibleMessages.endIndex
-                            )
-                        } else {
-                            newMessageCount = 1
-                        }
-                        unreadLiveMessageCount = min(
-                            9_999,
-                            unreadLiveMessageCount + max(1, newMessageCount)
-                        )
                     }
                     hasPositionedInitialFeed = true
                 }
