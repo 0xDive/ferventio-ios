@@ -19,6 +19,7 @@ final class PushNotificationCoordinator {
     @ObservationIgnored private var registrationGeneration: UInt64 = 0
     @ObservationIgnored private var pendingRegistration: PendingRegistration?
     @ObservationIgnored private var registrationLoopRunning = false
+    @ObservationIgnored private var registrationCleanupRunning = false
 
     init(
         preferencesStore: PushNotificationPreferencesStore? = nil,
@@ -117,6 +118,7 @@ final class PushNotificationCoordinator {
 
         registrationGeneration &+= 1
         pendingRegistration = nil
+        registrationCleanupRunning = true
         preferences = preferencesStore.save(
             PushNotificationPreferences(
                 enabled: false,
@@ -131,6 +133,8 @@ final class PushNotificationCoordinator {
             // Disabling local delivery must not be blocked by a temporary backend error.
             errorMessage = error.localizedDescription
         }
+        pendingRegistration = nil
+        registrationCleanupRunning = false
         authorizationService.unregisterForRemoteNotifications()
         lastDeviceToken = nil
         isTransportRegistered = false
@@ -209,9 +213,12 @@ final class PushNotificationCoordinator {
     func signedOut() async {
         registrationGeneration &+= 1
         pendingRegistration = nil
+        registrationCleanupRunning = true
         if preferences.enabled {
             try? await registrationService.unregister()
         }
+        pendingRegistration = nil
+        registrationCleanupRunning = false
         authorizationService.unregisterForRemoteNotifications()
         lastDeviceToken = nil
         isTransportRegistered = false
@@ -237,7 +244,7 @@ final class PushNotificationCoordinator {
             preferences: preferences,
             grant: grant
         )
-        guard !registrationLoopRunning else {
+        guard !registrationLoopRunning, !registrationCleanupRunning else {
             return
         }
 
@@ -250,7 +257,10 @@ final class PushNotificationCoordinator {
             isWorking = false
         }
 
-        while let request = pendingRegistration {
+        while !registrationCleanupRunning {
+            guard let request = pendingRegistration else {
+                break
+            }
             pendingRegistration = nil
             guard request.generation == registrationGeneration else {
                 continue
