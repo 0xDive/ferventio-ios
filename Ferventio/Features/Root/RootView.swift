@@ -13,6 +13,7 @@ struct RootView: View {
     @State private var showsWorkspaceLimit = false
     @State private var showsLiveWorkspaceLimit = false
     @State private var newWorkspaceLogin = ""
+    @State private var pendingPushRoute: PushNotificationRoute?
     @State private var pushNotificationCoordinator = PushNotificationCoordinator()
     @State private var workspaceRegistry = ChatWorkspaceRegistryStore()
     @State private var workspaceRuntimePool = ChatWorkspaceRuntimePool(
@@ -133,6 +134,7 @@ struct RootView: View {
                     grant: environment.authenticationGrantForPush(),
                     channelLogins: workspaceRegistry.workspaces.map(\.login)
                 )
+                await routePendingPushIfPossible()
             }
         }
         .onChange(of: workspaceRegistry.workspaces.map(\.login)) { _, logins in
@@ -167,6 +169,19 @@ struct RootView: View {
             if let error = notification.object as? NSError {
                 pushNotificationCoordinator.registrationFailed(error)
             }
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: .ferventioDidOpenRemoteNotification
+            )
+        ) { notification in
+            guard let route = PushNotificationRoute(
+                userInfo: notification.userInfo ?? [:]
+            ) else {
+                return
+            }
+            pendingPushRoute = route
+            Task { await routePendingPushIfPossible() }
         }
         .onChange(of: scenePhase) { _, phase in
             guard environment.state == .signedIn else {
@@ -624,6 +639,31 @@ struct RootView: View {
         await workspaceRuntimePool.updateHistoryPreferences(
             environment.chatHistoryPreferences()
         )
+    }
+
+    @MainActor
+    private func routePendingPushIfPossible() async {
+        guard environment.state == .signedIn,
+              let route = pendingPushRoute else {
+            return
+        }
+        pendingPushRoute = nil
+        showsInteractiveManagement = false
+
+        switch workspaceRegistry.open(login: route.channelLogin) {
+        case let .opened(workspace):
+            let runtime = workspaceRuntimePool.runtime(for: workspace)
+            guard runtime.chatStore.connectionState != .connected else {
+                return
+            }
+            await connectWorkspace(runtime)
+
+        case .capacityReached:
+            showsWorkspaceLimit = true
+
+        case .invalidLogin:
+            break
+        }
     }
 
     private func settingsLocalized(_ key: String.LocalizationValue) -> String {
