@@ -209,6 +209,7 @@ final class PushNotificationCoordinator {
         lastDeviceToken = nil
         isTransportRegistered = false
         selfTestSucceeded = nil
+        PushNotificationRouteBuffer.shared.clear()
     }
 
     private func refreshRegistration(
