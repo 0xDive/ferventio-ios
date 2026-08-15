@@ -127,16 +127,13 @@ public struct BackendSettingsSyncClient: Sendable {
         device: DeviceIdentity,
         credential: BackendSessionCredential
     ) async throws -> BackendSettingsSyncSnapshot {
-        let payload = try decodePayload(payloadJSON)
         var request = makeRequest(method: "PUT", path: "/v1/sync/settings")
         applyAuthenticatedHeaders(to: &request, device: device, credential: credential)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONEncoder().encode(
-            PutRequestWire(
-                baseRevision: baseRevision,
-                force: force,
-                payload: payload
-            )
+        request.httpBody = try makePutRequestBody(
+            payloadJSON: payloadJSON,
+            baseRevision: baseRevision,
+            force: force
         )
 
         let (data, response) = try await session.data(for: request)
@@ -208,6 +205,21 @@ public struct BackendSettingsSyncClient: Sendable {
             throw makeHTTPError(statusCode: httpResponse.statusCode, data: data)
         }
         return try decodeSnapshot(data)
+    }
+
+    func makePutRequestBody(
+        payloadJSON: String,
+        baseRevision: Int64,
+        force: Bool
+    ) throws -> Data {
+        let payload = try decodePayload(payloadJSON)
+        return try JSONEncoder().encode(
+            PutRequestWire(
+                baseRevision: baseRevision,
+                force: force,
+                payload: payload
+            )
+        )
     }
 
     private func decodeSnapshot(_ data: Data) throws -> BackendSettingsSyncSnapshot {
