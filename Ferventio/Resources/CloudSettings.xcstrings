@@ -1,0 +1,96 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "conflict.message" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Another device changed the cloud backup after this device read it. Choose which copy should win." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Другое устройство изменило облачную копию после того, как это устройство её прочитало. Выберите, какую версию сохранить." } }
+      }
+    },
+    "conflict.overwrite" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Overwrite cloud" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Перезаписать облако" } }
+      }
+    },
+    "conflict.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Cloud backup changed" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Облачная копия изменилась" } }
+      }
+    },
+    "conflict.use_cloud" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Use cloud copy" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Использовать копию из облака" } }
+      }
+    },
+    "download" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Load from cloud" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Загрузить из облака" } }
+      }
+    },
+    "downloaded" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Cloud revision %lld is ready. Tap Done to apply it." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Облачная ревизия %lld готова. Нажмите «Готово», чтобы применить её." } }
+      }
+    },
+    "empty" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "There is no cloud backup yet." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Облачной резервной копии пока нет." } }
+      }
+    },
+    "error.generic" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The cloud backup response could not be processed." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Не удалось обработать ответ облачной резервной копии." } }
+      }
+    },
+    "error.invalid_payload" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The local settings backup is invalid and cannot be uploaded." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Локальная резервная копия настроек некорректна и не может быть загружена." } }
+      }
+    },
+    "error.not_authenticated" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Sign in again before syncing settings." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Перед синхронизацией настроек войдите в аккаунт заново." } }
+      }
+    },
+    "footer" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Syncs the portable Ferventio backup v2 through your authenticated backend session. OAuth credentials and Keychain secrets are never uploaded. iOS-only presentation rules remain local." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Синхронизирует переносимую резервную копию Ferventio v2 через авторизованную backend-сессию. OAuth-данные и секреты Keychain никогда не загружаются. Правила отображения, доступные только на iOS, остаются локальными." } }
+      }
+    },
+    "section" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Cloud backup" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Облачная резервная копия" } }
+      }
+    },
+    "upload" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Save to cloud" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Сохранить в облако" } }
+      }
+    },
+    "uploaded" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Saved as cloud revision %lld." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Сохранено как облачная ревизия %lld." } }
+      }
+    },
+    "working" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Syncing settings…" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Синхронизация настроек…" } }
+      }
+    }
+  },
+  "version" : "1.0"
+}
