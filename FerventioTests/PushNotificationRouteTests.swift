@@ -108,4 +108,19 @@ struct PushNotificationRouteTests {
         #expect(buffer.takeLatest() == second)
         #expect(buffer.takeLatest() == nil)
     }
+
+    @Test
+    func bufferClearDropsPendingRoute() throws {
+        let buffer = PushNotificationRouteBuffer()
+        let route = try #require(
+            PushNotificationRoute(
+                userInfo: ["ferventio": ["channelLogin": "old-account-channel"]]
+            )
+        )
+
+        buffer.store(route)
+        buffer.clear()
+
+        #expect(buffer.takeLatest() == nil)
+    }
 }
