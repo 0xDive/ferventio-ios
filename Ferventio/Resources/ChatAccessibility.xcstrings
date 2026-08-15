@@ -1,0 +1,12 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "jump_to_live.unread_count" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Unread messages: %lld" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Непрочитанных сообщений: %lld" } }
+      }
+    }
+  },
+  "version" : "1.0"
+}
