@@ -45,11 +45,11 @@ struct BackendPushRegistrationClientTests {
         let session = makeSession(state: state) { request in
             switch (request.httpMethod, request.url?.path) {
             case ("PUT", "/v1/push/registrations/installation"):
-                return (200, Data(#"{"status":"registered"}"#.utf8))
+                return (200, Data(#"{"status":"registered"}"#.replacingOccurrences(of: "\\", with: "").utf8))
             case ("POST", "/v1/push/registrations/installation/self-test"):
                 return (202, Data())
             default:
-                return (404, Data(#"{"error":"unexpected"}"#.utf8))
+                return (404, Data(#"{"error":"unexpected"}"#.replacingOccurrences(of: "\\", with: "").utf8))
             }
         }
         let client = BackendPushRegistrationClient(
@@ -80,7 +80,7 @@ struct BackendPushRegistrationClientTests {
     func deleteTreatsMissingRegistrationAsAlreadyDeleted() async throws {
         let state = PushURLProtocolState()
         let session = makeSession(state: state) { _ in
-            (404, Data(#"{"error":"registration not found"}"#.utf8))
+            (404, Data(#"{"error":"registration not found"}"#.replacingOccurrences(of: "\\", with: "").utf8))
         }
         let client = BackendPushRegistrationClient(
             baseURL: URL(string: "https://ferventio.example")!,
