@@ -1,4 +1,6 @@
 import Foundation
+import FerventioDomain
+import FerventioNetworking
 import Testing
 @testable import Ferventio
 
@@ -139,6 +141,69 @@ struct ChatWorkspaceRuntimeTests {
         #expect(replacement !== runtime)
         #expect(pool.beginConnection(for: replacement))
     }
+
+    @Test
+    func activeTransitionDuringSuspendReconnectsAfterDisconnectFinishes() async {
+        let eventSub = BlockingLifecycleEventSubClient()
+        let pool = ChatWorkspaceRuntimePool(
+            historyPreferences: .default,
+            factory: { workspace, preferences in
+                let history = NoopChatHistory()
+                return ChatWorkspaceRuntime(
+                    workspace: workspace,
+                    chatStore: ChatStore(
+                        client: eventSub,
+                        history: history,
+                        historyPreferences: preferences
+                    ),
+                    chatAssetStore: ChatAssetStore(),
+                    chatHistoryPager: ChatHistoryPager(
+                        history: history,
+                        preferences: preferences
+                    ),
+                    chatComposerStore: ChatComposerStore(),
+                    interactiveMutationStore: InteractiveChatMutationStore()
+                )
+            }
+        )
+        let workspace = ChatWorkspace(id: UUID(), login: "channel")
+        let runtime = pool.runtime(for: workspace)
+        let channel = ChatChannel(id: "channel", login: "channel", displayName: "Channel")
+        let lease = TwitchAccessLease(
+            accessToken: "access",
+            leaseExpiresAtEpochMilliseconds: 100_000,
+            twitchExpiresAtEpochMilliseconds: 150_000,
+            twitchValidatedAtEpochMilliseconds: 90_000,
+            backendSessionExpiresAtEpochMilliseconds: 200_000,
+            session: TwitchSession(
+                clientID: "client",
+                userID: "user",
+                login: "tester",
+                scopes: ["user:read:chat"],
+                expiresInSeconds: 150
+            )
+        )
+
+        await runtime.chatStore.connect(
+            channel: channel,
+            lease: lease,
+            currentUser: nil
+        )
+        #expect(runtime.chatStore.connectionState == .connected)
+
+        let suspendTask = Task { @MainActor in
+            await pool.suspendAll()
+        }
+        await eventSub.waitUntilSuspendDisconnectStarts()
+
+        await pool.resumeAll()
+        await eventSub.releaseSuspendDisconnect()
+        await suspendTask.value
+
+        #expect(runtime.chatStore.connectionState == .connected)
+        #expect(await eventSub.recordedConnectCount() == 2)
+        await pool.removeAll()
+    }
 }
 
 @MainActor
@@ -165,5 +230,68 @@ private final class RuntimeFactory {
             chatComposerStore: ChatComposerStore(),
             interactiveMutationStore: InteractiveChatMutationStore()
         )
+    }
+}
+
+private actor BlockingLifecycleEventSubClient: EventSubChatStreaming {
+    private var connectCount = 0
+    private var disconnectCount = 0
+    private var suspendDisconnectStarted = false
+    private var suspendDisconnectWaiters: [CheckedContinuation<Void, Never>] = []
+    private var suspendDisconnectContinuation: CheckedContinuation<Void, Never>?
+
+    func connect(
+        channel: ChatChannel,
+        lease: TwitchAccessLease
+    ) async throws -> EventSubSubscription {
+        connectCount += 1
+        return EventSubSubscription(
+            id: "subscription-\(connectCount)",
+            status: "enabled",
+            type: "channel.chat.message",
+            version: "1",
+            cost: 0,
+            sessionID: "session-\(connectCount)"
+        )
+    }
+
+    func nextEvent() async throws -> TwitchEventSubChatClient.Event {
+        try await Task.sleep(for: .seconds(3_600))
+        throw CancellationError()
+    }
+
+    func disconnect() async {
+        disconnectCount += 1
+        guard disconnectCount == 2 else {
+            return
+        }
+
+        await withCheckedContinuation { continuation in
+            suspendDisconnectContinuation = continuation
+            suspendDisconnectStarted = true
+            let waiters = suspendDisconnectWaiters
+            suspendDisconnectWaiters.removeAll()
+            for waiter in waiters {
+                waiter.resume()
+            }
+        }
+    }
+
+    func waitUntilSuspendDisconnectStarts() async {
+        guard !suspendDisconnectStarted else {
+            return
+        }
+        await withCheckedContinuation { continuation in
+            suspendDisconnectWaiters.append(continuation)
+        }
+    }
+
+    func releaseSuspendDisconnect() {
+        suspendDisconnectContinuation?.resume()
+        suspendDisconnectContinuation = nil
+    }
+
+    func recordedConnectCount() -> Int {
+        connectCount
     }
 }
