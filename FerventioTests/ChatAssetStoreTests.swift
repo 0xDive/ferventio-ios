@@ -38,6 +38,33 @@ struct ChatAssetStoreTests {
     }
 
     @Test
+    func duplicateGlobalBadgeIDsUseLatestDefinitionWithoutCrashing() async {
+        let first = ChatBadgeAsset(
+            setID: "subscriber",
+            versionID: "1",
+            imageURL2x: "https://example.com/first.png"
+        )
+        let latest = ChatBadgeAsset(
+            setID: "subscriber",
+            versionID: "1",
+            imageURL2x: "https://example.com/latest.png"
+        )
+        let store = ChatAssetStore(
+            badges: StubBadgeLoader(global: [first, latest], channel: [])
+        )
+
+        await store.loadBadges(
+            clientID: "client",
+            accessToken: "access",
+            broadcasterID: "channel"
+        )
+
+        #expect(store.badgeAssets.count == 1)
+        #expect(store.badgeAssets[first.id] == latest)
+        #expect(!store.isLoadingBadges)
+    }
+
+    @Test
     func oneFailedBadgeCatalogStillKeepsSuccessfulCatalog() async {
         let moderator = ChatBadgeAsset(setID: "moderator", versionID: "1")
         let store = ChatAssetStore(
