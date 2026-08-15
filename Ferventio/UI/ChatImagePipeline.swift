@@ -25,7 +25,8 @@ private enum ChatImageLoader {
     static func load(
         url: URL,
         session: URLSession,
-        displayScale: CGFloat
+        displayScale: CGFloat,
+        allowsAnimation: Bool
     ) async -> ChatImageAsset? {
         do {
             var request = URLRequest(url: url)
@@ -42,7 +43,11 @@ private enum ChatImageLoader {
                   data.count <= maximumResponseBytes else {
                 return nil
             }
-            return decode(data, displayScale: displayScale)
+            return decode(
+                data,
+                displayScale: displayScale,
+                allowsAnimation: allowsAnimation
+            )
         } catch {
             return nil
         }
@@ -50,7 +55,8 @@ private enum ChatImageLoader {
 
     private static func decode(
         _ data: Data,
-        displayScale: CGFloat
+        displayScale: CGFloat,
+        allowsAnimation: Bool
     ) -> ChatImageAsset? {
         let sourceOptions: [CFString: Any] = [
             kCGImageSourceShouldCache: false,
@@ -74,7 +80,7 @@ private enum ChatImageLoader {
             orientation: .up
         )
         let firstCost = decodedCost(of: firstCGImage)
-        guard frameCount > 1 else {
+        guard frameCount > 1, allowsAnimation else {
             return ChatImageAsset(
                 image: firstImage,
                 decodedByteCost: max(firstCost, data.count)
@@ -193,14 +199,19 @@ private enum ChatImageLoader {
 final class ChatImagePipeline {
     static let shared = ChatImagePipeline()
 
+    private struct RequestKey: Hashable {
+        let url: URL
+        let allowsAnimation: Bool
+    }
+
     private struct InFlightLoad {
         let id: UUID
         let task: Task<ChatImageAsset?, Never>
     }
 
-    private let cache = NSCache<NSURL, ChatImageAsset>()
+    private let cache = NSCache<NSString, ChatImageAsset>()
     private let session: URLSession
-    private var inFlight: [URL: InFlightLoad] = [:]
+    private var inFlight: [RequestKey: InFlightLoad] = [:]
 
     init(session: URLSession? = nil) {
         if let session {
@@ -219,14 +230,16 @@ final class ChatImagePipeline {
         cache.totalCostLimit = 96 * 1024 * 1024
     }
 
-    func image(for url: URL) async -> ChatImageAsset? {
+    func image(for url: URL, allowsAnimation: Bool = true) async -> ChatImageAsset? {
         guard url.scheme?.lowercased() == "https" else {
             return nil
         }
-        if let cached = cache.object(forKey: url as NSURL) {
+        let requestKey = RequestKey(url: url, allowsAnimation: allowsAnimation)
+        let cacheKey = cacheKey(for: requestKey)
+        if let cached = cache.object(forKey: cacheKey) {
             return cached
         }
-        if let load = inFlight[url] {
+        if let load = inFlight[requestKey] {
             return await load.task.value
         }
 
@@ -236,17 +249,18 @@ final class ChatImagePipeline {
             await ChatImageLoader.load(
                 url: url,
                 session: session,
-                displayScale: displayScale
+                displayScale: displayScale,
+                allowsAnimation: allowsAnimation
             )
         }
-        inFlight[url] = InFlightLoad(id: loadID, task: task)
+        inFlight[requestKey] = InFlightLoad(id: loadID, task: task)
         let asset = await task.value
-        if inFlight[url]?.id == loadID {
-            inFlight[url] = nil
+        if inFlight[requestKey]?.id == loadID {
+            inFlight[requestKey] = nil
         }
 
         if let asset {
-            cache.setObject(asset, forKey: url as NSURL, cost: asset.decodedByteCost)
+            cache.setObject(asset, forKey: cacheKey, cost: asset.decodedByteCost)
         }
         return asset
     }
@@ -257,6 +271,10 @@ final class ChatImagePipeline {
             load.task.cancel()
         }
         inFlight.removeAll()
+    }
+
+    private func cacheKey(for requestKey: RequestKey) -> NSString {
+        "\(requestKey.url.absoluteString)#animation=\(requestKey.allowsAnimation)" as NSString
     }
 }
 
