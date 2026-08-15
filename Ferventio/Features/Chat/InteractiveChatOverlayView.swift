@@ -31,6 +31,7 @@ struct InteractiveChatOverlayView: View {
             )
 
             ForEach(poll.choices) { choice in
+                let share = poll.voteShare(choiceID: choice.id)
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 8) {
                         Text(choice.title)
@@ -41,10 +42,11 @@ struct InteractiveChatOverlayView: View {
                             .font(.caption.monospacedDigit())
                             .foregroundStyle(.secondary)
                     }
-                    ProgressView(value: poll.voteShare(choiceID: choice.id))
-                        .accessibilityLabel(Text(choice.title))
-                        .accessibilityValue(Text(percent(poll.voteShare(choiceID: choice.id))))
+                    ProgressView(value: share)
+                        .accessibilityHidden(true)
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityValue(Text(percent(share)))
             }
 
             HStack {
@@ -55,6 +57,7 @@ struct InteractiveChatOverlayView: View {
             }
             .font(.caption)
             .foregroundStyle(.secondary)
+            .accessibilityElement(children: .combine)
         }
         .padding(10)
         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
@@ -70,6 +73,7 @@ struct InteractiveChatOverlayView: View {
             )
 
             ForEach(prediction.outcomes) { outcome in
+                let share = prediction.pointsShare(outcomeID: outcome.id)
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 8) {
                         if prediction.winningOutcomeID == outcome.id {
@@ -84,12 +88,11 @@ struct InteractiveChatOverlayView: View {
                             .font(.caption.monospacedDigit())
                             .foregroundStyle(.secondary)
                     }
-                    ProgressView(value: prediction.pointsShare(outcomeID: outcome.id))
-                        .accessibilityLabel(Text(outcome.title))
-                        .accessibilityValue(
-                            Text(percent(prediction.pointsShare(outcomeID: outcome.id)))
-                        )
+                    ProgressView(value: share)
+                        .accessibilityHidden(true)
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityValue(Text(percent(share)))
             }
 
             ViewThatFits(in: .horizontal) {
@@ -106,6 +109,7 @@ struct InteractiveChatOverlayView: View {
             }
             .font(.caption)
             .foregroundStyle(.secondary)
+            .accessibilityElement(children: .combine)
         }
         .padding(10)
         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
@@ -134,6 +138,7 @@ struct InteractiveChatOverlayView: View {
                 .font(.subheadline.weight(.semibold))
                 .fixedSize(horizontal: false, vertical: true)
         }
+        .accessibilityElement(children: .combine)
     }
 
     private func kindLabel(systemImage: String, kind: String) -> some View {
