@@ -10,6 +10,7 @@ struct UserCardView: View {
     let timeoutUser: () async throws -> NukeExecutionResult
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var profile: TwitchUser?
     @State private var didFinishProfileLoad = false
     @State private var showsTimeoutConfirmation = false
@@ -67,21 +68,32 @@ struct UserCardView: View {
 
     private var identitySection: some View {
         Section {
-            HStack(spacing: 14) {
-                profileImage
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(profile?.displayName ?? author.displayName)
-                        .font(.title3.weight(.semibold))
-                        .lineLimit(1)
-                    Text("@\(profile?.login ?? author.login)")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 12) {
+                    profileImage
+                    identityText
                 }
-                Spacer(minLength: 0)
+                .padding(.vertical, 4)
+            } else {
+                HStack(spacing: 14) {
+                    profileImage
+                    identityText
+                    Spacer(minLength: 0)
+                }
+                .padding(.vertical, 4)
             }
-            .padding(.vertical, 4)
+        }
+    }
+
+    private var identityText: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(profile?.displayName ?? author.displayName)
+                .font(.title3.weight(.semibold))
+                .fixedSize(horizontal: false, vertical: true)
+            Text("@\(profile?.login ?? author.login)")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -310,6 +322,7 @@ struct UserCardView: View {
             }
             .frame(width: 64, height: 64)
             .clipShape(Circle())
+            .accessibilityHidden(true)
         } else {
             Image(systemName: "person.crop.circle.fill")
                 .resizable()
