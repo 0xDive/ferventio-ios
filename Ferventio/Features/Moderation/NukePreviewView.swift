@@ -8,6 +8,7 @@ struct NukePreviewView: View {
     let execute: (NukeExecutionPlan) async throws -> NukeExecutionResult
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var config: NukePreviewConfig
     @State private var pendingPlan: NukeExecutionPlan?
     @State private var showsExecutionConfirmation = false
@@ -93,32 +94,50 @@ struct NukePreviewView: View {
 
     private var matchingSection: some View {
         Section {
-            Picker(localized("nuke.match_mode"), selection: $config.matchMode) {
-                Text(localized("nuke.plain_text"))
-                    .tag(NukeMatchMode.plainText)
-                Text(localized("nuke.regex"))
-                    .tag(NukeMatchMode.regex)
+            if dynamicTypeSize.isAccessibilitySize {
+                matchModePicker
+                    .pickerStyle(.menu)
+            } else {
+                matchModePicker
+                    .pickerStyle(.segmented)
             }
-            .pickerStyle(.segmented)
-            .disabled(isExecuting)
-            .onChange(of: config.matchMode) { _, _ in clearExecutionOutcome() }
 
             Toggle(localized("nuke.case_sensitive"), isOn: $config.caseSensitive)
                 .disabled(isExecuting)
                 .onChange(of: config.caseSensitive) { _, _ in clearExecutionOutcome() }
 
-            Picker(localized("nuke.time_window"), selection: $config.windowMilliseconds) {
-                ForEach(Self.windowPresets, id: \.self) { milliseconds in
-                    Text("\(milliseconds / 1_000)s")
-                        .tag(milliseconds)
-                }
+            if dynamicTypeSize.isAccessibilitySize {
+                timeWindowPicker
+                    .pickerStyle(.menu)
+            } else {
+                timeWindowPicker
+                    .pickerStyle(.segmented)
             }
-            .pickerStyle(.segmented)
-            .disabled(isExecuting)
-            .onChange(of: config.windowMilliseconds) { _, _ in clearExecutionOutcome() }
         } header: {
             Text(localized("nuke.matching"))
         }
+    }
+
+    private var matchModePicker: some View {
+        Picker(localized("nuke.match_mode"), selection: $config.matchMode) {
+            Text(localized("nuke.plain_text"))
+                .tag(NukeMatchMode.plainText)
+            Text(localized("nuke.regex"))
+                .tag(NukeMatchMode.regex)
+        }
+        .disabled(isExecuting)
+        .onChange(of: config.matchMode) { _, _ in clearExecutionOutcome() }
+    }
+
+    private var timeWindowPicker: some View {
+        Picker(localized("nuke.time_window"), selection: $config.windowMilliseconds) {
+            ForEach(Self.windowPresets, id: \.self) { milliseconds in
+                Text("\(milliseconds / 1_000)s")
+                    .tag(milliseconds)
+            }
+        }
+        .disabled(isExecuting)
+        .onChange(of: config.windowMilliseconds) { _, _ in clearExecutionOutcome() }
     }
 
     private var exclusionsSection: some View {
@@ -179,7 +198,7 @@ struct NukePreviewView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(sample.userDisplayName.isEmpty ? sample.userLogin : sample.userDisplayName)
                             .font(.subheadline.weight(.semibold))
-                            .lineLimit(1)
+                            .fixedSize(horizontal: false, vertical: true)
                         Text(sample.text)
                             .font(.footnote)
                             .foregroundStyle(.secondary)
