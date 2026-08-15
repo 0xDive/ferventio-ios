@@ -227,6 +227,13 @@ private enum ChatImageLoader {
 
 @MainActor
 final class ChatImagePipeline {
+    typealias Loader = @Sendable (
+        _ url: URL,
+        _ session: URLSession,
+        _ displayScale: CGFloat,
+        _ allowsAnimation: Bool
+    ) async -> ChatImageAsset?
+
     static let shared = ChatImagePipeline()
 
     private struct RequestKey: Hashable {
@@ -241,9 +248,11 @@ final class ChatImagePipeline {
 
     private let cache = NSCache<NSString, ChatImageAsset>()
     private let session: URLSession
+    private let loader: Loader
     private var inFlight: [RequestKey: InFlightLoad] = [:]
+    private var cacheGeneration: UInt64 = 0
 
-    init(session: URLSession? = nil) {
+    init(session: URLSession? = nil, loader: Loader? = nil) {
         if let session {
             self.session = session
         } else {
@@ -255,6 +264,14 @@ final class ChatImagePipeline {
                 diskPath: "ferventio-chat-images"
             )
             self.session = URLSession(configuration: configuration)
+        }
+        self.loader = loader ?? { url, session, displayScale, allowsAnimation in
+            await ChatImageLoader.load(
+                url: url,
+                session: session,
+                displayScale: displayScale,
+                allowsAnimation: allowsAnimation
+            )
         }
         cache.countLimit = 512
         cache.totalCostLimit = 96 * 1024 * 1024
@@ -274,14 +291,10 @@ final class ChatImagePipeline {
         }
 
         let loadID = UUID()
+        let requestGeneration = cacheGeneration
         let displayScale = UIScreen.main.scale
-        let task = Task { [session] in
-            await ChatImageLoader.load(
-                url: url,
-                session: session,
-                displayScale: displayScale,
-                allowsAnimation: allowsAnimation
-            )
+        let task = Task { [session, loader] in
+            await loader(url, session, displayScale, allowsAnimation)
         }
         inFlight[requestKey] = InFlightLoad(id: loadID, task: task)
         let asset = await task.value
@@ -289,13 +302,14 @@ final class ChatImagePipeline {
             inFlight[requestKey] = nil
         }
 
-        if let asset {
+        if cacheGeneration == requestGeneration, let asset {
             cache.setObject(asset, forKey: cacheKey, cost: asset.decodedByteCost)
         }
         return asset
     }
 
     func removeAllCachedImages() {
+        cacheGeneration &+= 1
         cache.removeAllObjects()
         for load in inFlight.values {
             load.task.cancel()
