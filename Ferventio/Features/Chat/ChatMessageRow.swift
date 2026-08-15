@@ -2,6 +2,8 @@ import FerventioDomain
 import SwiftUI
 
 struct ChatMessageRow: View {
+    @ScaledMetric(relativeTo: .subheadline) private var badgeSize: CGFloat = 18
+
     let message: ChatMessage
     let badgeAssets: [String: ChatBadgeAsset]
     let onOpenUserCard: () -> Void
@@ -28,7 +30,7 @@ struct ChatMessageRow: View {
                         } placeholder: {
                             Color.clear
                         }
-                        .frame(width: 18, height: 18)
+                        .frame(width: badgeSize, height: badgeSize)
                         .accessibilityLabel(Text(asset.title ?? asset.setID))
                     }
                 }
@@ -135,6 +137,7 @@ private struct ChatFragmentFlow: View {
 
 private struct BttvComposedEmoteView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ScaledMetric(relativeTo: .body) private var emoteSize: CGFloat = 28
 
     let base: ChatFragment
     let overlays: [ChatFragment]
@@ -166,8 +169,10 @@ private struct BttvComposedEmoteView: View {
             * visualState.scaleX
         let yScale: CGFloat = (flipY ? -1 : 1) * visualState.scaleY
         let rotation = rotationDegrees + visualState.rotationDegrees
-        let width: CGFloat = wide ? 112 : 28
-        let layoutWidth = max(1, width - (noSpace ? 4 : 0))
+        let geometryScale = emoteSize / 28
+        let noSpaceOverlap = 4 * geometryScale
+        let width: CGFloat = wide ? emoteSize * 4 : emoteSize
+        let layoutWidth = max(1, width - (noSpace ? noSpaceOverlap : 0))
         let scaleAnchor: UnitPoint = visualState.usesBottomAnchor ? .bottom : .center
 
         return ZStack {
@@ -184,10 +189,10 @@ private struct BttvComposedEmoteView: View {
         .saturation(party ? 2.5 : 1)
         .hueRotation(.degrees(partyHue(at: date) + visualState.hueRotationDegrees))
         .offset(
-            x: visualState.offsetX - (noSpace ? 4 : 0),
-            y: visualState.offsetY
+            x: visualState.offsetX * geometryScale - (noSpace ? noSpaceOverlap : 0),
+            y: visualState.offsetY * geometryScale
         )
-        .frame(width: layoutWidth, height: 28)
+        .frame(width: layoutWidth, height: emoteSize)
         .accessibilityElement(children: .combine)
     }
 
@@ -280,6 +285,7 @@ private struct ChatFragmentView: View {
 
 private struct RemoteChatImage: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ScaledMetric(relativeTo: .body) private var emoteSize: CGFloat = 28
 
     let url: URL?
     let fallbackText: String
@@ -301,7 +307,7 @@ private struct RemoteChatImage: View {
                     .font(.body)
             }
         }
-        .frame(width: 28, height: 28)
+        .frame(width: emoteSize, height: emoteSize)
         .accessibilityLabel(Text(accessibilityLabel))
         .task(id: requestID) {
             asset = nil
