@@ -3,6 +3,7 @@ import UIKit
 
 @main
 struct FerventioApp: App {
+    @UIApplicationDelegateAdaptor(FerventioAppDelegate.self) private var appDelegate
     @Environment(\.scenePhase) private var scenePhase
     @State private var environment = AppEnvironment()
 
