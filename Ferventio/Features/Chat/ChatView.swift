@@ -47,14 +47,16 @@ struct ChatView: View {
             feedScrollPosition = Self.feedBottomID
             unreadLiveMessageCount = 0
             sheetRequest = nil
-            Task {
-                let draft = await composerStore.activate(channelID: channelID)
-                guard store.channel?.id == channelID else {
-                    return
-                }
-                if store.composerText != draft {
-                    store.composerText = draft
-                }
+        }
+        .task(id: store.channel?.id) {
+            let channelID = store.channel?.id
+            let draft = await composerStore.activate(channelID: channelID)
+            guard !Task.isCancelled,
+                  store.channel?.id == channelID else {
+                return
+            }
+            if store.composerText != draft {
+                store.composerText = draft
             }
         }
         .onChange(of: store.composerText, initial: true) { _, text in
@@ -98,7 +100,7 @@ struct ChatView: View {
         ) {
             Button("common.ok", role: .cancel) {}
         } message: {
-            Text("chat.error.message")
+            Text("auth.error.message")
         }
         .alert(
             String(localized: "chat.send.error.title"),

@@ -18,15 +18,24 @@ struct PushNotificationSettingsView: View {
                 if coordinator.preferences.enabled {
                     Toggle(
                         localized("replies_mentions"),
-                        isOn: categoryBinding(\.repliesAndMentions)
+                        isOn: categoryBinding(
+                            .repliesAndMentions,
+                            keyPath: \.repliesAndMentions
+                        )
                     )
                     Toggle(
                         localized("moderation"),
-                        isOn: categoryBinding(\.moderation)
+                        isOn: categoryBinding(
+                            .moderation,
+                            keyPath: \.moderation
+                        )
                     )
                     Toggle(
                         localized("channel_activity"),
-                        isOn: categoryBinding(\.channelActivity)
+                        isOn: categoryBinding(
+                            .channelActivity,
+                            keyPath: \.channelActivity
+                        )
                     )
                 }
             } header: {
@@ -106,30 +115,18 @@ struct PushNotificationSettingsView: View {
     }
 
     private func categoryBinding(
-        _ keyPath: KeyPath<PushNotificationPreferences, Bool>
+        _ category: PushNotificationCategory,
+        keyPath: KeyPath<PushNotificationPreferences, Bool>
     ) -> Binding<Bool> {
         Binding(
             get: { coordinator.preferences[keyPath: keyPath] },
-            set: { newValue in
-                var repliesAndMentions = coordinator.preferences.repliesAndMentions
-                var moderation = coordinator.preferences.moderation
-                var channelActivity = coordinator.preferences.channelActivity
-                if keyPath == \.repliesAndMentions {
-                    repliesAndMentions = newValue
-                } else if keyPath == \.moderation {
-                    moderation = newValue
-                } else {
-                    channelActivity = newValue
-                }
-                Task {
-                    await coordinator.updateCategories(
-                        repliesAndMentions: repliesAndMentions,
-                        moderation: moderation,
-                        channelActivity: channelActivity,
-                        grant: grant,
-                        channelLogins: channelLogins
-                    )
-                }
+            set: { enabled in
+                coordinator.updateCategory(
+                    category,
+                    enabled: enabled,
+                    grant: grant,
+                    channelLogins: channelLogins
+                )
             }
         )
     }

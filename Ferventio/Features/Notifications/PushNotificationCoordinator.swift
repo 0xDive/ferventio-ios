@@ -3,6 +3,12 @@ import FerventioDomain
 import Observation
 import UserNotifications
 
+enum PushNotificationCategory: Sendable {
+    case repliesAndMentions
+    case moderation
+    case channelActivity
+}
+
 @MainActor
 @Observable
 final class PushNotificationCoordinator {
@@ -160,25 +166,39 @@ final class PushNotificationCoordinator {
         isTransportRegistered = false
     }
 
-    func updateCategories(
-        repliesAndMentions: Bool,
-        moderation: Bool,
-        channelActivity: Bool,
+    func updateCategory(
+        _ category: PushNotificationCategory,
+        enabled: Bool,
         grant: AuthenticationGrant?,
         channelLogins: [String]
-    ) async {
-        preferences = preferencesStore.save(
-            PushNotificationPreferences(
-                enabled: preferences.enabled,
-                repliesAndMentions: repliesAndMentions,
-                moderation: moderation,
-                channelActivity: channelActivity
-            )
+    ) {
+        let current = preferences
+        let updated = PushNotificationPreferences(
+            enabled: current.enabled,
+            repliesAndMentions: category == .repliesAndMentions
+                ? enabled
+                : current.repliesAndMentions,
+            moderation: category == .moderation
+                ? enabled
+                : current.moderation,
+            channelActivity: category == .channelActivity
+                ? enabled
+                : current.channelActivity
         )
+        preferences = preferencesStore.save(updated)
+
         guard preferences.enabled, acceptsRegistrationCallbacks else {
             return
         }
-        await refreshRegistration(grant: grant, channelLogins: channelLogins)
+        Task { [weak self] in
+            guard let self else {
+                return
+            }
+            await self.refreshRegistration(
+                grant: grant,
+                channelLogins: channelLogins
+            )
+        }
     }
 
     func receiveDeviceToken(
