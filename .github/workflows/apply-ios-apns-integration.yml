@@ -1,0 +1,33 @@
+name: Apply iOS APNs Integration
+
+on:
+  push:
+    branches:
+      - feat/ios-apns
+    paths:
+      - .github/workflows/apply-ios-apns-integration.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: feat/ios-apns
+          fetch-depth: 0
+      - name: Apply integration patch
+        run: python3 .github/scripts/apply_ios_apns_integration.py
+      - name: Commit integration
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Ferventio/App/AppEnvironment.swift
+          git add Ferventio/Features/Root/RootView.swift
+          git add Ferventio/Features/Settings/ChatHistorySettingsView.swift
+          git rm .github/scripts/apply_ios_apns_integration.py
+          git rm .github/workflows/apply-ios-apns-integration.yml
+          git commit -m "feat: integrate iOS push notifications"
+          git push origin HEAD:feat/ios-apns
