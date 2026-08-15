@@ -36,6 +36,7 @@ targets:
             CFBundleURLName: Ferventio OAuth
             CFBundleURLSchemes:
               - $(PRODUCT_BUNDLE_IDENTIFIER)
+        ITSAppUsesNonExemptEncryption: false
         LSApplicationCategoryType: public.app-category.social-networking
         UIApplicationSupportsIndirectInputEvents: true
         UILaunchScreen: {}
