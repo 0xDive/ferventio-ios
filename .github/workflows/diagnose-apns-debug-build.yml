@@ -6,6 +6,10 @@ on:
       - feat/ios-apns
     paths:
       - .github/workflows/diagnose-apns-debug-build.yml
+      - Ferventio/App/FerventioAppDelegate.swift
+      - Ferventio/Features/Notifications/**
+      - Ferventio/Features/Root/RootView.swift
+      - Ferventio/Features/Settings/PushNotificationSettingsView.swift
 
 permissions:
   contents: read
