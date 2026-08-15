@@ -68,6 +68,27 @@ struct PushNotificationRouteTests {
     }
 
     @Test
+    func sendableMetadataRoundTripsWithoutOriginalAPNsDictionary() throws {
+        let original = try #require(
+            PushNotificationRoute(
+                userInfo: [
+                    "ferventio": [
+                        "channelLogin": "Channel",
+                        "messageId": "message-42",
+                        "destination": "moderation",
+                    ],
+                ]
+            )
+        )
+
+        let reconstructed = try #require(
+            PushNotificationRoute(userInfo: original.notificationUserInfo)
+        )
+
+        #expect(reconstructed == original)
+    }
+
+    @Test
     func bufferKeepsOnlyLatestRouteAndConsumesItOnce() throws {
         let buffer = PushNotificationRouteBuffer()
         let first = try #require(
