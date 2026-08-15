@@ -19,11 +19,44 @@ enum SettingsSyncServiceError: Swift.Error, Equatable, Sendable {
     case notAuthenticated
 }
 
+struct SettingsSyncCredentialSnapshot {
+    private enum State {
+        case credential(BackendSessionCredential)
+        case missing
+        case failure(any Swift.Error)
+    }
+
+    private let state: State
+
+    init(load: () throws -> StoredAuthentication?) {
+        do {
+            if let stored = try load() {
+                state = .credential(stored.backendCredential)
+            } else {
+                state = .missing
+            }
+        } catch {
+            state = .failure(error)
+        }
+    }
+
+    func requireCredential() throws -> BackendSessionCredential {
+        switch state {
+        case let .credential(credential):
+            return credential
+        case .missing:
+            throw SettingsSyncServiceError.notAuthenticated
+        case let .failure(error):
+            throw error
+        }
+    }
+}
+
 @MainActor
 final class SettingsSyncService: SettingsSyncing {
     private let client: BackendSettingsSyncClient
     private let identityStore: DeviceIdentityStore
-    private let authenticationStore: AuthenticationStore
+    private let credentialSnapshot: SettingsSyncCredentialSnapshot
 
     init(
         client: BackendSettingsSyncClient,
@@ -32,7 +65,9 @@ final class SettingsSyncService: SettingsSyncing {
     ) {
         self.client = client
         self.identityStore = identityStore
-        self.authenticationStore = authenticationStore
+        credentialSnapshot = SettingsSyncCredentialSnapshot {
+            try authenticationStore.load()
+        }
     }
 
     static func live(configuration: AppConfiguration = .live) -> SettingsSyncService {
@@ -88,12 +123,9 @@ final class SettingsSyncService: SettingsSyncing {
         device: DeviceIdentity,
         credential: BackendSessionCredential
     ) {
-        guard let stored = try authenticationStore.load() else {
-            throw SettingsSyncServiceError.notAuthenticated
-        }
-        return (
+        (
             try identityStore.loadOrCreate(),
-            stored.backendCredential
+            try credentialSnapshot.requireCredential()
         )
     }
 }
