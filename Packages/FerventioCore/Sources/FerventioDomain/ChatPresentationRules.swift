@@ -148,6 +148,8 @@ public struct ChatPresentationRulePlan {
 public enum ChatPresentationRuleEngine {
     public static let maximumQueryLength = 256
 
+    private static let planCache = ChatPresentationRulePlanCache()
+
     public static func validate(
         _ rule: ChatPresentationRule
     ) -> ChatPresentationRuleValidationError? {
@@ -169,7 +171,7 @@ public enum ChatPresentationRuleEngine {
         messages: [ChatMessage],
         rules: [ChatPresentationRule]
     ) -> ChatPresentationRuleProjection {
-        ChatPresentationRulePlan(rules: rules).project(messages: messages)
+        planCache.plan(for: rules).project(messages: messages)
     }
 
     fileprivate static func normalizedQuery(_ query: String) -> String {
@@ -189,6 +191,29 @@ public enum ChatPresentationRuleEngine {
             options: [.caseInsensitive, .diacriticInsensitive],
             locale: nil
         )
+    }
+}
+
+private final class ChatPresentationRulePlanCache: @unchecked Sendable {
+    private let lock = NSLock()
+    private var cachedRules: [ChatPresentationRule]?
+    private var cachedPlan: ChatPresentationRulePlan?
+
+    func plan(for rules: [ChatPresentationRule]) -> ChatPresentationRulePlan {
+        lock.lock()
+        if cachedRules == rules, let cachedPlan {
+            lock.unlock()
+            return cachedPlan
+        }
+        lock.unlock()
+
+        let plan = ChatPresentationRulePlan(rules: rules)
+
+        lock.lock()
+        cachedRules = rules
+        cachedPlan = plan
+        lock.unlock()
+        return plan
     }
 }
 
