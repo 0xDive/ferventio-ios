@@ -1,4 +1,5 @@
 import Foundation
+import FerventioDomain
 
 struct PushNotificationRoute: Equatable, Sendable {
     let channelLogin: String
@@ -53,6 +54,19 @@ struct PushNotificationRoute: Equatable, Sendable {
         }
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
+    }
+}
+
+struct PushNotificationRouteSessionPolicy {
+    static func acceptsOpenedRoute(in state: AppState) -> Bool {
+        state != .signedOut
+    }
+
+    static func shouldClearPendingRoute(
+        previousUserID: String?,
+        currentUserID: String?
+    ) -> Bool {
+        previousUserID != nil && currentUserID == nil
     }
 }
 
