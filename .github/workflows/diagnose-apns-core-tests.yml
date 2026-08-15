@@ -1,0 +1,38 @@
+name: Diagnose APNs Core Tests
+
+on:
+  push:
+    branches:
+      - feat/ios-apns
+    paths:
+      - .github/workflows/diagnose-apns-core-tests.yml
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: macos-15
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Run APNs networking tests
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          LOG="$RUNNER_TEMP/apns-core-tests.log"
+          swift test \
+            --package-path Packages/FerventioCore \
+            --filter BackendPushRegistrationClientTests 2>&1 | tee "$LOG"
+          STATUS="${PIPESTATUS[0]}"
+          set -e
+          if [[ "$STATUS" -ne 0 ]]; then
+            grep -Ei 'error:|failed|failure|expectation|BackendPushRegistration|issue recorded|fatal error' "$LOG" \
+              | tail -n 100 \
+              | while IFS= read -r line; do
+                  line="${line//'%'/'%25'}"
+                  echo "::error title=APNs core test failure::$line"
+                done
+            exit "$STATUS"
+          fi
