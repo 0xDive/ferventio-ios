@@ -26,9 +26,10 @@ jobs:
       - name: Test core packages
         run: swift test --package-path Packages/FerventioCore
 
-      - name: Validate privacy manifest
+      - name: Validate privacy manifest and entitlements
         run: |
           plutil -lint Ferventio/Resources/PrivacyInfo.xcprivacy
+          plutil -lint Ferventio/Ferventio.entitlements
           /usr/bin/python3 - <<'PY'
           import plistlib
           from pathlib import Path
@@ -137,6 +138,7 @@ jobs:
           [[ "$(plutil -extract CFBundleShortVersionString raw "$APP_PLIST")" == "0.1.0" ]]
           [[ "$(plutil -extract CFBundleVersion raw "$APP_PLIST")" == "1" ]]
           [[ "$(plutil -extract CFBundleIdentifier raw "$APP_PLIST")" == "io.ferventio.ios" ]]
+          [[ "$(plutil -extract CFBundleURLTypes.0.CFBundleURLSchemes.0 raw "$APP_PLIST")" == "io.ferventio.ios" ]]
           [[ "$(plutil -extract ITSAppUsesNonExemptEncryption raw "$APP_PLIST")" == "false" ]]
 
       - name: Select iOS Simulator
