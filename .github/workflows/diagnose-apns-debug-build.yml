@@ -36,15 +36,18 @@ jobs:
           STATUS="${PIPESTATUS[0]}"
           set -e
           if [[ "$STATUS" -ne 0 ]]; then
-            echo "--- last 100 build log lines ---"
-            tail -n 100 "$LOG"
-            tail -n 100 "$LOG" \
-              | while IFS= read -r line; do
-                  [[ -z "$line" ]] && continue
-                  line="${line//'%'/'%25'}"
-                  line="${line//$'\r'/'%0D'}"
-                  line="${line//$'\n'/'%0A'}"
-                  echo "::error title=APNs Debug build tail::$line"
-                done
+            MATCHES="$RUNNER_TEMP/apns-debug-errors.log"
+            grep -nE '(^|[[:space:]])error:|fatal error:|non-sendable|actor-isolated|sending .* risks|Command .* failed|EmitSwiftModule.*failed' "$LOG" \
+              | tail -n 40 > "$MATCHES" || true
+            if [[ ! -s "$MATCHES" ]]; then
+              tail -n 40 "$LOG" > "$MATCHES"
+            fi
+            while IFS= read -r line; do
+              [[ -z "$line" ]] && continue
+              line="${line//'%'/'%25'}"
+              line="${line//$'\r'/'%0D'}"
+              line="${line//$'\n'/'%0A'}"
+              echo "::error title=APNs Debug compiler diagnostic::$line"
+            done < "$MATCHES"
             exit "$STATUS"
           fi
