@@ -128,11 +128,16 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             archive
 
-          APP_PLIST="$ARCHIVE_PATH/Products/Applications/Ferventio.app/Info.plist"
+          APP_PATH="$ARCHIVE_PATH/Products/Applications/Ferventio.app"
+          APP_PLIST="$APP_PATH/Info.plist"
+          PRIVACY_MANIFEST="$APP_PATH/PrivacyInfo.xcprivacy"
           test -f "$APP_PLIST"
+          test -f "$PRIVACY_MANIFEST"
+          plutil -lint "$PRIVACY_MANIFEST"
           [[ "$(plutil -extract CFBundleShortVersionString raw "$APP_PLIST")" == "0.1.0" ]]
           [[ "$(plutil -extract CFBundleVersion raw "$APP_PLIST")" == "1" ]]
           [[ "$(plutil -extract CFBundleIdentifier raw "$APP_PLIST")" == "io.ferventio.ios" ]]
+          [[ "$(plutil -extract ITSAppUsesNonExemptEncryption raw "$APP_PLIST")" == "false" ]]
 
       - name: Select iOS Simulator
         run: |
