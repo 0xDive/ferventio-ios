@@ -89,7 +89,10 @@ final class ChatAssetStore {
             return
         }
 
-        var merged = Dictionary(uniqueKeysWithValues: global.map { ($0.id, $0) })
+        var merged: [String: ChatBadgeAsset] = [:]
+        for asset in global {
+            merged[asset.id] = asset
+        }
         for asset in channel {
             merged[asset.id] = asset
         }
