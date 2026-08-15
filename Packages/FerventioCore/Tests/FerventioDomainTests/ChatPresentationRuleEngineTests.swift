@@ -192,6 +192,40 @@ struct ChatPresentationRuleEngineTests {
         #expect(projection.isHighlighted(messageID: message.id))
     }
 
+    @Test
+    func compiledPlanCanProjectMultipleSnapshotsWithStableSemantics() {
+        let rules = [
+            ChatPresentationRule(
+                action: .hide,
+                target: .message,
+                matchMode: .regex,
+                query: #"spam-\d+"#
+            ),
+            ChatPresentationRule(
+                action: .highlight,
+                target: .author,
+                query: "café mod"
+            ),
+        ]
+        let plan = ChatPresentationRulePlan(rules: rules)
+        let firstVisible = makeMessage(
+            id: "first-visible",
+            authorLogin: "mod",
+            authorDisplayName: "CAFÉ MOD",
+            text: "hello"
+        )
+        let firstHidden = makeMessage(id: "first-hidden", text: "SPAM-42")
+        let secondVisible = makeMessage(id: "second-visible", text: "later")
+
+        let first = plan.project(messages: [firstVisible, firstHidden])
+        let second = plan.project(messages: [secondVisible])
+
+        #expect(first.visibleMessages == [firstVisible])
+        #expect(first.highlightedMessageIDs == [firstVisible.id])
+        #expect(second.visibleMessages == [secondVisible])
+        #expect(second.highlightedMessageIDs.isEmpty)
+    }
+
     private func makeMessage(
         id: String,
         authorLogin: String = "viewer",
