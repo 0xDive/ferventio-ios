@@ -18,7 +18,15 @@ final class PushNotificationAuthorizationService: PushNotificationAuthorizing {
     }
 
     func requestAuthorization() async throws -> Bool {
-        try await center.requestAuthorization(options: [.alert, .sound, .badge])
+        try await withCheckedThrowingContinuation { continuation in
+            center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume(returning: granted)
+                }
+            }
+        }
     }
 
     func authorizationStatus() async -> UNAuthorizationStatus {
