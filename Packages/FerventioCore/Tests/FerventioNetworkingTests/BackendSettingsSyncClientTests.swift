@@ -48,7 +48,7 @@ struct BackendSettingsSyncClientTests {
     }
 
     @Test
-    func putSurfacesRevisionConflictAndSendsPayloadAsJSONObject() async throws {
+    func putSurfacesRevisionConflictAndEncodesPayloadAsJSONObject() async throws {
         let state = URLProtocolState()
         let session = makeSession(state: state) { _ in
             let body = """
@@ -86,6 +86,19 @@ struct BackendSettingsSyncClientTests {
         }
         """
 
+        let requestBody = try client.makePutRequestBody(
+            payloadJSON: payload,
+            baseRevision: 2,
+            force: false
+        )
+        let object = try #require(
+            JSONSerialization.jsonObject(with: requestBody) as? [String: Any]
+        )
+        #expect(object["baseRevision"] as? Int == 2)
+        #expect(object["force"] as? Bool == false)
+        let encodedPayload = try #require(object["payload"] as? [String: Any])
+        #expect(encodedPayload["formatVersion"] as? Int == 2)
+
         do {
             _ = try await client.put(
                 payloadJSON: payload,
@@ -102,14 +115,9 @@ struct BackendSettingsSyncClientTests {
 
         let request = try #require(state.lastRequest)
         #expect(request.httpMethod == "PUT")
-        let requestBody = try #require(request.httpBody)
-        let object = try #require(
-            JSONSerialization.jsonObject(with: requestBody) as? [String: Any]
-        )
-        #expect(object["baseRevision"] as? Int == 2)
-        #expect(object["force"] as? Bool == false)
-        let encodedPayload = try #require(object["payload"] as? [String: Any])
-        #expect(encodedPayload["formatVersion"] as? Int == 2)
+        #expect(request.url?.path == "/v1/sync/settings")
+        #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
+        #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer session-token")
     }
 
     private var device: DeviceIdentity {
@@ -154,39 +162,11 @@ private final class URLProtocolState: @unchecked Sendable {
     }
 
     func handle(_ request: URLRequest) -> (Int, Data)? {
-        var capturedRequest = request
-        if capturedRequest.httpBody == nil,
-           let stream = capturedRequest.httpBodyStream,
-           let body = materialize(stream) {
-            capturedRequest.httpBody = body
-            capturedRequest.httpBodyStream = nil
-        }
         let handler = lock.withLock {
-            storedLastRequest = capturedRequest
+            storedLastRequest = request
             return storedHandler
         }
-        return handler?(capturedRequest)
-    }
-
-    private func materialize(_ stream: InputStream) -> Data? {
-        stream.open()
-        defer { stream.close() }
-
-        let bufferSize = 4_096
-        let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
-        defer { buffer.deallocate() }
-
-        var data = Data()
-        while true {
-            let count = stream.read(buffer, maxLength: bufferSize)
-            if count < 0 {
-                return nil
-            }
-            if count == 0 {
-                return data
-            }
-            data.append(buffer, count: count)
-        }
+        return handler?(request)
     }
 }
 
