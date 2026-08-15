@@ -49,7 +49,7 @@ actor PersistenceChatHistory: ChatHistoryPersisting {
     init(
         store: PersistenceStore,
         saveBatch: SaveBatch? = nil,
-        automaticFlushDelay: Duration = Self.flushDelay
+        automaticFlushDelay: Duration = PersistenceChatHistory.flushDelay
     ) {
         self.store = store
         self.automaticFlushDelay = automaticFlushDelay
