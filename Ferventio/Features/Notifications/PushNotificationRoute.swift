@@ -17,6 +17,17 @@ struct PushNotificationRoute: Equatable, Sendable {
         destination = Self.nonEmptyString(payload["destination"])
     }
 
+    var notificationUserInfo: [AnyHashable: Any] {
+        var payload: [String: Any] = ["channelLogin": channelLogin]
+        if let messageID {
+            payload["messageId"] = messageID
+        }
+        if let destination {
+            payload["destination"] = destination
+        }
+        return ["ferventio": payload]
+    }
+
     private static func dictionary(_ value: Any?) -> [String: Any]? {
         if let dictionary = value as? [String: Any] {
             return dictionary
