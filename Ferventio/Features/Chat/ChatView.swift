@@ -196,6 +196,20 @@ struct ChatView: View {
                     .padding(.vertical, 10)
                 }
                 .scrollPosition(id: $feedScrollPosition, anchor: .bottom)
+                .overlay(alignment: .bottomTrailing) {
+                    if hasPositionedInitialFeed,
+                       feedScrollPosition != Self.feedBottomID {
+                        Button {
+                            proxy.scrollTo(Self.feedBottomID, anchor: .bottom)
+                            feedScrollPosition = Self.feedBottomID
+                        } label: {
+                            Label("chat.jump_to_live", systemImage: "arrow.down.to.line")
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                        .padding(12)
+                    }
+                }
                 .onChange(of: visibleMessages.last?.id, initial: true) { _, messageID in
                     guard messageID != nil else { return }
                     let shouldFollowLive = !hasPositionedInitialFeed

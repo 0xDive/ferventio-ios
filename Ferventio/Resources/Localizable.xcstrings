@@ -127,6 +127,12 @@
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "Ошибка подключения к чату" } }
       }
     },
+    "chat.jump_to_live" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Jump to live" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "К новым сообщениям" } }
+      }
+    },
     "chat.message.failed" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Message failed to send" } },
