@@ -26,6 +26,33 @@ jobs:
       - name: Test core packages
         run: swift test --package-path Packages/FerventioCore
 
+      - name: Validate privacy manifest
+        run: |
+          plutil -lint Ferventio/Resources/PrivacyInfo.xcprivacy
+          /usr/bin/python3 - <<'PY'
+          import plistlib
+          from pathlib import Path
+
+          manifest_path = Path("Ferventio/Resources/PrivacyInfo.xcprivacy")
+          with manifest_path.open("rb") as handle:
+              manifest = plistlib.load(handle)
+
+          entries = manifest.get("NSPrivacyAccessedAPITypes", [])
+          user_defaults = next(
+              (
+                  entry
+                  for entry in entries
+                  if entry.get("NSPrivacyAccessedAPIType")
+                  == "NSPrivacyAccessedAPICategoryUserDefaults"
+              ),
+              None,
+          )
+          if user_defaults is None:
+              raise SystemExit("UserDefaults privacy access category is missing")
+          if "CA92.1" not in user_defaults.get("NSPrivacyAccessedAPITypeReasons", []):
+              raise SystemExit("UserDefaults privacy reason CA92.1 is missing")
+          PY
+
       - name: Generate Xcode project
         run: xcodegen generate
 
