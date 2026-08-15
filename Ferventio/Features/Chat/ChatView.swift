@@ -100,7 +100,7 @@ struct ChatView: View {
         ) {
             Button("common.ok", role: .cancel) {}
         } message: {
-            Text("auth.error.message")
+            Text("chat.error.message")
         }
         .alert(
             String(localized: "chat.send.error.title"),
