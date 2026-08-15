@@ -48,9 +48,11 @@ struct InteractiveChatManagementView: View {
                     Button(localized("interactive.manage.terminate"), role: .destructive) {
                         Task { _ = await endPoll(poll, .terminated) }
                     }
+                    .disabled(isMutating)
                     Button(localized("interactive.manage.archive")) {
                         Task { _ = await endPoll(poll, .archived) }
                     }
+                    .disabled(isMutating)
                 }
             }
         }
@@ -91,11 +93,13 @@ struct InteractiveChatManagementView: View {
                         Button(localized("interactive.manage.lock")) {
                             Task { _ = await endPrediction(prediction, .locked, nil) }
                         }
+                        .disabled(isMutating)
                     }
                     if prediction.isActive || prediction.isLocked {
                         Button(localized("interactive.manage.cancel"), role: .destructive) {
                             Task { _ = await endPrediction(prediction, .canceled, nil) }
                         }
+                        .disabled(isMutating)
                     }
                     if prediction.isLocked {
                         Picker(localized("interactive.manage.winner"), selection: $winningOutcomeID) {
@@ -114,7 +118,7 @@ struct InteractiveChatManagementView: View {
                                 )
                             }
                         }
-                        .disabled(winningOutcomeID == nil)
+                        .disabled(isMutating || winningOutcomeID == nil)
                     }
                 }
             }

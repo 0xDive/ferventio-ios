@@ -47,6 +47,32 @@ struct InteractiveChatMutationStoreTests {
         #expect(store.status?.recovery == InteractiveMutationRecovery.none)
     }
 
+    @Test
+    func ignoresConcurrentMutationWhileRequestIsInFlight() async {
+        let client = BlockingInteractiveMutator()
+        let store = InteractiveChatMutationStore(client: client)
+
+        async let firstResult = store.createPoll(
+            channel: ownChannel(),
+            lease: makeLease(scopes: ["channel:manage:polls"]),
+            draft: pollDraft()
+        )
+
+        await client.waitUntilStarted()
+        let secondResult = await store.createPoll(
+            channel: ownChannel(),
+            lease: makeLease(scopes: ["channel:manage:polls"]),
+            draft: pollDraft()
+        )
+
+        #expect(!secondResult)
+        #expect(await client.calls == 1)
+
+        await client.release()
+        #expect(await firstResult)
+        #expect(store.status == nil)
+    }
+
     private func ownChannel() -> ChatChannel {
         ChatChannel(id: "user", login: "tester", displayName: "Tester")
     }
@@ -99,5 +125,41 @@ private actor StubInteractiveMutator: InteractiveChatMutating {
     func endPrediction(clientID: String, accessToken: String, broadcasterID: String, predictionID: String, status: PredictionEndStatus, winningOutcomeID: String?) async throws {
         calls += 1
         if let error { throw error }
+    }
+}
+
+private actor BlockingInteractiveMutator: InteractiveChatMutating {
+    private(set) var calls = 0
+    private var started = false
+    private var isReleased = false
+
+    func waitUntilStarted() async {
+        while !started {
+            await Task.yield()
+        }
+    }
+
+    func release() {
+        isReleased = true
+    }
+
+    func createPoll(clientID: String, accessToken: String, broadcasterID: String, draft: PollDraft) async throws {
+        calls += 1
+        started = true
+        while !isReleased {
+            await Task.yield()
+        }
+    }
+
+    func endPoll(clientID: String, accessToken: String, broadcasterID: String, pollID: String, status: PollEndStatus) async throws {
+        calls += 1
+    }
+
+    func createPrediction(clientID: String, accessToken: String, broadcasterID: String, draft: PredictionDraft) async throws {
+        calls += 1
+    }
+
+    func endPrediction(clientID: String, accessToken: String, broadcasterID: String, predictionID: String, status: PredictionEndStatus, winningOutcomeID: String?) async throws {
+        calls += 1
     }
 }

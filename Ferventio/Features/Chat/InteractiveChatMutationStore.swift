@@ -93,6 +93,9 @@ final class InteractiveChatMutationStore {
         requiredScope: String,
         operation: () async throws -> Void
     ) async -> Bool {
+        guard status?.inFlight != true else {
+            return false
+        }
         guard channel.id == lease.session.userID,
               lease.session.scopes.contains(requiredScope) else {
             status = InteractiveMutationStatus(
