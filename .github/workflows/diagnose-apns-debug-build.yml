@@ -36,11 +36,15 @@ jobs:
           STATUS="${PIPESTATUS[0]}"
           set -e
           if [[ "$STATUS" -ne 0 ]]; then
-            grep -E '(^|[[:space:]])error:|SwiftCompile|EmitSwiftModule|fatal error' "$LOG" \
-              | tail -n 120 \
+            echo "--- last 80 build log lines ---"
+            tail -n 80 "$LOG"
+            tail -n 80 "$LOG" \
               | while IFS= read -r line; do
+                  [[ -z "$line" ]] && continue
                   line="${line//'%'/'%25'}"
-                  echo "::error title=APNs Debug compile failure::$line"
+                  line="${line//$'\r'/'%0D'}"
+                  line="${line//$'\n'/'%0A'}"
+                  echo "::error title=APNs Debug build tail::$line"
                 done
             exit "$STATUS"
           fi
