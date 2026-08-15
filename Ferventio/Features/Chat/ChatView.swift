@@ -220,6 +220,7 @@ struct ChatView: View {
                             }
                         }
                         .accessibilityLabel(Text("chat.jump_to_live"))
+                        .accessibilityValue(Text(unreadLiveMessagesAccessibilityValue))
                         .buttonStyle(.borderedProminent)
                         .controlSize(.small)
                         .padding(12)
@@ -467,6 +468,16 @@ struct ChatView: View {
             return
         }
         await composerStore.recordSuccessfulSend(channelID: channelID, text: text)
+    }
+
+    private var unreadLiveMessagesAccessibilityValue: String {
+        guard unreadLiveMessageCount > 0 else {
+            return ""
+        }
+        return String.localizedStringWithFormat(
+            String(localized: "jump_to_live.unread_count", table: "ChatAccessibility"),
+            unreadLiveMessageCount
+        )
     }
 
     private var channelStatusSystemImage: String {
