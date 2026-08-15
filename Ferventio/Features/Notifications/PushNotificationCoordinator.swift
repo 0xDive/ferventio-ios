@@ -20,6 +20,7 @@ final class PushNotificationCoordinator {
     @ObservationIgnored private var pendingRegistration: PendingRegistration?
     @ObservationIgnored private var registrationLoopRunning = false
     @ObservationIgnored private var registrationCleanupRunning = false
+    @ObservationIgnored private var acceptsRegistrationCallbacks = false
 
     init(
         preferencesStore: PushNotificationPreferencesStore? = nil,
@@ -38,13 +39,16 @@ final class PushNotificationCoordinator {
         channelLogins: [String]
     ) async {
         guard preferences.enabled, grant != nil else {
+            acceptsRegistrationCallbacks = false
             return
         }
         let status = await authorizationService.authorizationStatus()
         switch status {
         case .authorized, .provisional, .ephemeral:
+            acceptsRegistrationCallbacks = true
             authorizationService.registerForRemoteNotifications()
         case .denied:
+            acceptsRegistrationCallbacks = false
             preferences = preferencesStore.save(
                 PushNotificationPreferences(
                     enabled: false,
@@ -56,10 +60,11 @@ final class PushNotificationCoordinator {
             isTransportRegistered = false
             errorMessage = localized("permission_denied")
         case .notDetermined:
+            acceptsRegistrationCallbacks = false
             // Never trigger the system permission prompt during passive app restore.
             break
         @unknown default:
-            break
+            acceptsRegistrationCallbacks = false
         }
     }
 
@@ -80,6 +85,7 @@ final class PushNotificationCoordinator {
         do {
             let granted = try await authorizationService.requestAuthorization()
             guard granted else {
+                acceptsRegistrationCallbacks = false
                 preferences = preferencesStore.save(
                     PushNotificationPreferences(
                         enabled: false,
@@ -99,9 +105,11 @@ final class PushNotificationCoordinator {
                     channelActivity: preferences.channelActivity
                 )
             )
+            acceptsRegistrationCallbacks = true
             authorizationService.registerForRemoteNotifications()
             return true
         } catch {
+            acceptsRegistrationCallbacks = false
             errorMessage = error.localizedDescription
             return false
         }
@@ -116,6 +124,7 @@ final class PushNotificationCoordinator {
         selfTestSucceeded = nil
         defer { isWorking = false }
 
+        acceptsRegistrationCallbacks = false
         registrationGeneration &+= 1
         pendingRegistration = nil
         registrationCleanupRunning = true
@@ -155,7 +164,7 @@ final class PushNotificationCoordinator {
                 channelActivity: channelActivity
             )
         )
-        guard preferences.enabled else {
+        guard preferences.enabled, acceptsRegistrationCallbacks else {
             return
         }
         await refreshRegistration(grant: grant, channelLogins: channelLogins)
@@ -166,10 +175,10 @@ final class PushNotificationCoordinator {
         grant: AuthenticationGrant?,
         channelLogins: [String]
     ) async {
-        lastDeviceToken = deviceToken
-        guard preferences.enabled else {
+        guard preferences.enabled, acceptsRegistrationCallbacks else {
             return
         }
+        lastDeviceToken = deviceToken
         await refreshRegistration(grant: grant, channelLogins: channelLogins)
     }
 
@@ -177,13 +186,18 @@ final class PushNotificationCoordinator {
         grant: AuthenticationGrant?,
         channelLogins: [String]
     ) async {
-        guard preferences.enabled, lastDeviceToken != nil else {
+        guard preferences.enabled,
+              acceptsRegistrationCallbacks,
+              lastDeviceToken != nil else {
             return
         }
         await refreshRegistration(grant: grant, channelLogins: channelLogins)
     }
 
     func registrationFailed(_ error: any Error) {
+        guard acceptsRegistrationCallbacks else {
+            return
+        }
         isTransportRegistered = false
         errorMessage = error.localizedDescription
     }
@@ -211,6 +225,7 @@ final class PushNotificationCoordinator {
     }
 
     func signedOut() async {
+        acceptsRegistrationCallbacks = false
         registrationGeneration &+= 1
         pendingRegistration = nil
         registrationCleanupRunning = true
@@ -222,6 +237,7 @@ final class PushNotificationCoordinator {
         authorizationService.unregisterForRemoteNotifications()
         lastDeviceToken = nil
         isTransportRegistered = false
+        errorMessage = nil
         selfTestSucceeded = nil
         PushNotificationRouteBuffer.shared.clear()
     }
@@ -230,8 +246,10 @@ final class PushNotificationCoordinator {
         grant: AuthenticationGrant?,
         channelLogins: [String]
     ) async {
-        guard let grant, let lastDeviceToken else {
-            if grant == nil {
+        guard acceptsRegistrationCallbacks,
+              let grant,
+              let lastDeviceToken else {
+            if grant == nil && acceptsRegistrationCallbacks {
                 errorMessage = localized("error.not_authenticated")
             }
             return
@@ -257,7 +275,7 @@ final class PushNotificationCoordinator {
             isWorking = false
         }
 
-        while !registrationCleanupRunning {
+        while acceptsRegistrationCallbacks && !registrationCleanupRunning {
             guard let request = pendingRegistration else {
                 break
             }
@@ -274,7 +292,8 @@ final class PushNotificationCoordinator {
                     preferences: request.preferences,
                     grant: request.grant
                 )
-                guard request.generation == registrationGeneration else {
+                guard acceptsRegistrationCallbacks,
+                      request.generation == registrationGeneration else {
                     // A logout or disable can race with an in-flight backend register.
                     // Remove the stale registration before allowing a newer request to run.
                     try? await registrationService.unregister()
@@ -282,7 +301,8 @@ final class PushNotificationCoordinator {
                 }
                 isTransportRegistered = true
             } catch {
-                guard request.generation == registrationGeneration else {
+                guard acceptsRegistrationCallbacks,
+                      request.generation == registrationGeneration else {
                     continue
                 }
                 isTransportRegistered = false
