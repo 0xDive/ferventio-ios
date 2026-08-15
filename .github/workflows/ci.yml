@@ -15,10 +15,20 @@ concurrency:
 
 jobs:
   verify:
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
+
+      - name: Validate Apple toolchain
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          XCODE_VERSION="$(xcodebuild -version | awk 'NR == 1 { print $2 }')"
+          IOS_SDK_VERSION="$(xcrun --sdk iphoneos --show-sdk-version)"
+          echo "Using Xcode ${XCODE_VERSION} with iOS SDK ${IOS_SDK_VERSION}"
+          [[ "${XCODE_VERSION%%.*}" -ge 26 ]]
+          [[ "${IOS_SDK_VERSION%%.*}" -ge 26 ]]
 
       - name: Install XcodeGen
         run: brew install xcodegen
