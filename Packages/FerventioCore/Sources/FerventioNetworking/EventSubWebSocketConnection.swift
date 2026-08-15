@@ -25,6 +25,7 @@ public actor EventSubWebSocketConnection {
     private let session: URLSession
     private var task: URLSessionWebSocketTask?
     private var keepaliveSeconds = defaultKeepaliveSeconds
+    private var lifecycleGeneration: UInt64 = 0
 
     public init(session: URLSession = .shared) {
         self.session = session
@@ -39,6 +40,8 @@ public actor EventSubWebSocketConnection {
         guard task == nil else {
             throw Error.alreadyConnected
         }
+        lifecycleGeneration &+= 1
+        let generation = lifecycleGeneration
         let socket = try makeSocket(for: url)
         task = socket
         socket.resume()
@@ -49,11 +52,17 @@ public actor EventSubWebSocketConnection {
                 timeoutSeconds: Self.welcomeTimeoutSeconds,
                 timeoutError: .welcomeTimedOut
             )
+            guard lifecycleGeneration == generation,
+                  isCurrentTask(socket) else {
+                throw CancellationError()
+            }
             try applyWelcome(welcome)
             return welcome
         } catch {
             socket.cancel(with: .goingAway, reason: nil)
-            task = nil
+            if isCurrentTask(socket) {
+                task = nil
+            }
             throw error
         }
     }
@@ -74,6 +83,8 @@ public actor EventSubWebSocketConnection {
         guard let previousTask = task else {
             throw Error.notConnected
         }
+        lifecycleGeneration &+= 1
+        let generation = lifecycleGeneration
         let replacement = try makeSocket(for: reconnectURL)
         replacement.resume()
 
@@ -83,6 +94,10 @@ public actor EventSubWebSocketConnection {
                 timeoutSeconds: Self.welcomeTimeoutSeconds,
                 timeoutError: .welcomeTimedOut
             )
+            guard lifecycleGeneration == generation,
+                  isCurrentTask(previousTask) else {
+                throw CancellationError()
+            }
             try applyWelcome(welcome)
             task = replacement
             previousTask.cancel(with: .goingAway, reason: nil)
@@ -94,6 +109,7 @@ public actor EventSubWebSocketConnection {
     }
 
     public func close() {
+        lifecycleGeneration &+= 1
         task?.cancel(with: .goingAway, reason: nil)
         task = nil
         keepaliveSeconds = Self.defaultKeepaliveSeconds
@@ -115,6 +131,13 @@ public actor EventSubWebSocketConnection {
             throw Error.invalidURL
         }
         return session.webSocketTask(with: url)
+    }
+
+    private func isCurrentTask(_ candidate: URLSessionWebSocketTask) -> Bool {
+        guard let task else {
+            return false
+        }
+        return task === candidate
     }
 
     private func applyWelcome(_ envelope: EventSubEnvelope) throws {
