@@ -149,15 +149,14 @@ final class ChatWorkspaceRuntimePool {
     func beginConnection(for runtime: ChatWorkspaceRuntime) -> Bool {
         guard !runtime.isClosed,
               let pooledRuntime = runtimes[runtime.id],
-              pooledRuntime === runtime else {
+              pooledRuntime === runtime,
+              !connectionReservations.contains(runtime.id) else {
             return false
         }
-        if Self.reservesLiveConnection(runtime.chatStore.connectionState) {
-            return true
-        }
-        guard !connectionReservations.contains(runtime.id),
-              occupiedConnectionSlotCount < Self.maximumLiveConnections else {
-            return false
+        if !Self.reservesLiveConnection(runtime.chatStore.connectionState) {
+            guard occupiedConnectionSlotCount < Self.maximumLiveConnections else {
+                return false
+            }
         }
         connectionReservations.insert(runtime.id)
         return true
