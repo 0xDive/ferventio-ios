@@ -80,6 +80,12 @@ public actor TwitchEventSubChatClient {
     private func nextEventWithoutTransportRecovery() async throws -> Event {
         while true {
             let envelope = try await webSocket.receive()
+            guard EventSubChannelScope.accepts(
+                envelope,
+                activeChannelID: activeChannel?.id
+            ) else {
+                continue
+            }
             if shouldIgnoreDuplicate(envelope) {
                 continue
             }
