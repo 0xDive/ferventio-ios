@@ -40,7 +40,11 @@ struct UserCardView: View {
             }
             .task(id: author.id + ":" + author.login) {
                 didFinishProfileLoad = false
-                profile = await loadProfile()
+                let loadedProfile = await loadProfile()
+                guard !Task.isCancelled else {
+                    return
+                }
+                profile = loadedProfile
                 didFinishProfileLoad = true
             }
         }
