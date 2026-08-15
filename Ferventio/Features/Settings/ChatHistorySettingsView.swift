@@ -7,6 +7,9 @@ import UniformTypeIdentifiers
 struct ChatHistorySettingsView: View {
     let save: (ChatHistoryPreferences, ChatPresentationPreferences) async -> Void
     let applyWorkspaceImport: (SettingsBackupImportPlan) async -> Void
+    let pushNotificationCoordinator: PushNotificationCoordinator
+    let authenticationGrant: AuthenticationGrant?
+    let pushChannelLogins: [String]
 
     @Environment(\.dismiss) private var dismiss
     @State private var repeatCollapseEnabled: Bool
@@ -36,11 +39,17 @@ struct ChatHistorySettingsView: View {
         preferences: ChatHistoryPreferences,
         presentationPreferences: ChatPresentationPreferences,
         workspaceSnapshot: ChatWorkspaceRegistrySnapshot,
+        pushNotificationCoordinator: PushNotificationCoordinator,
+        authenticationGrant: AuthenticationGrant?,
+        pushChannelLogins: [String],
         save: @escaping (ChatHistoryPreferences, ChatPresentationPreferences) async -> Void,
         applyWorkspaceImport: @escaping (SettingsBackupImportPlan) async -> Void
     ) {
         self.save = save
         self.applyWorkspaceImport = applyWorkspaceImport
+        self.pushNotificationCoordinator = pushNotificationCoordinator
+        self.authenticationGrant = authenticationGrant
+        self.pushChannelLogins = pushChannelLogins
         initialWorkspaceSnapshot = workspaceSnapshot
         _repeatCollapseEnabled = State(
             initialValue: presentationPreferences.repeatCollapseEnabled
@@ -143,6 +152,23 @@ struct ChatHistorySettingsView: View {
                     Text(localized("chat_history.local_section"))
                 } footer: {
                     Text(localized("chat_history.local_history.footer"))
+                }
+
+                Section {
+                    NavigationLink {
+                        PushNotificationSettingsView(
+                            coordinator: pushNotificationCoordinator,
+                            grant: authenticationGrant,
+                            channelLogins: pushChannelLogins
+                        )
+                    } label: {
+                        Label(
+                            pushLocalized("open"),
+                            systemImage: "bell.badge"
+                        )
+                    }
+                } footer: {
+                    Text(pushLocalized("settings.footer"))
                 }
 
                 Section {
@@ -602,6 +628,10 @@ struct ChatHistorySettingsView: View {
 
     private func cloudLocalized(_ key: String.LocalizationValue) -> String {
         String(localized: key, table: "CloudSettings")
+    }
+
+    private func pushLocalized(_ key: String.LocalizationValue) -> String {
+        String(localized: key, table: "PushNotifications")
     }
 
     private func filtersLocalized(_ key: String.LocalizationValue) -> String {

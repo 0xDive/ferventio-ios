@@ -1,3 +1,4 @@
+import Foundation
 import FerventioDomain
 import SwiftUI
 
@@ -12,6 +13,7 @@ struct RootView: View {
     @State private var showsWorkspaceLimit = false
     @State private var showsLiveWorkspaceLimit = false
     @State private var newWorkspaceLogin = ""
+    @State private var pushNotificationCoordinator = PushNotificationCoordinator()
     @State private var workspaceRegistry = ChatWorkspaceRegistryStore()
     @State private var workspaceRuntimePool = ChatWorkspaceRuntimePool(
         historyPreferences: .default
@@ -76,6 +78,9 @@ struct RootView: View {
                 preferences: environment.chatHistoryPreferences(),
                 presentationPreferences: environment.chatPresentationPreferences,
                 workspaceSnapshot: workspaceSnapshot,
+                pushNotificationCoordinator: pushNotificationCoordinator,
+                authenticationGrant: environment.authenticationGrantForPush(),
+                pushChannelLogins: workspaceRegistry.workspaces.map(\.login),
                 save: { preferences, presentationPreferences in
                     let saved = await environment.updateChatHistoryPreferences(preferences)
                     await workspaceRuntimePool.updateHistoryPreferences(saved)
@@ -122,7 +127,46 @@ struct RootView: View {
             guard userID != nil else {
                 return
             }
-            Task { await prepareWorkspaceRuntimes() }
+            Task {
+                await prepareWorkspaceRuntimes()
+                await pushNotificationCoordinator.restoreIfNeeded(
+                    grant: environment.authenticationGrantForPush(),
+                    channelLogins: workspaceRegistry.workspaces.map(\.login)
+                )
+            }
+        }
+        .onChange(of: workspaceRegistry.workspaces.map(\.login)) { _, logins in
+            Task {
+                await pushNotificationCoordinator.workspaceChannelsChanged(
+                    grant: environment.authenticationGrantForPush(),
+                    channelLogins: logins
+                )
+            }
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: .ferventioDidRegisterAPNsDeviceToken
+            )
+        ) { notification in
+            guard let deviceToken = notification.object as? Data else {
+                return
+            }
+            Task {
+                await pushNotificationCoordinator.receiveDeviceToken(
+                    deviceToken,
+                    grant: environment.authenticationGrantForPush(),
+                    channelLogins: workspaceRegistry.workspaces.map(\.login)
+                )
+            }
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: .ferventioDidFailAPNsRegistration
+            )
+        ) { notification in
+            if let error = notification.object as? NSError {
+                pushNotificationCoordinator.registrationFailed(error)
+            }
         }
         .onChange(of: scenePhase) { _, phase in
             guard environment.state == .signedIn else {
@@ -197,6 +241,7 @@ struct RootView: View {
                 Button("auth.sign_out", role: .destructive) {
                     Task {
                         await workspaceRuntimePool.removeAll()
+                        await pushNotificationCoordinator.signedOut()
                         await environment.signOut()
                     }
                 }

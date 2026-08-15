@@ -1,0 +1,102 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "channel_activity" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Channel activity" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "События канала" } }
+      }
+    },
+    "delivery.footer" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Ferventio registers this device with the backend only after notification permission is granted. The APNs token is refreshed from iOS and is not stored locally." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Ferventio регистрирует устройство на backend только после выдачи разрешения на уведомления. Токен APNs заново получает iOS, локально он не сохраняется." } }
+      }
+    },
+    "delivery.section" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Delivery" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Доставка" } }
+      }
+    },
+    "enabled" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Push notifications" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Push-уведомления" } }
+      }
+    },
+    "error.not_authenticated" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Sign in again before enabling push notifications." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Перед включением push-уведомлений войдите в аккаунт заново." } }
+      }
+    },
+    "moderation" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Moderation events" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "События модерации" } }
+      }
+    },
+    "open" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Push notifications" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Push-уведомления" } }
+      }
+    },
+    "permission_denied" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Notification permission is disabled in iOS Settings." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Разрешение на уведомления отключено в настройках iOS." } }
+      }
+    },
+    "replies_mentions" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Replies and mentions" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Ответы и упоминания" } }
+      }
+    },
+    "self_test" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Send test notification" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Отправить тестовое уведомление" } }
+      }
+    },
+    "self_test.sent" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The backend accepted the test notification." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Backend принял тестовое уведомление." } }
+      }
+    },
+    "status.footer" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The backend automatically verifies moderator channel access before enabling moderator-only events." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Backend автоматически проверяет права модератора канала перед включением событий, доступных только модераторам." } }
+      }
+    },
+    "status.section" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Status" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Состояние" } }
+      }
+    },
+    "title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Push notifications" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Push-уведомления" } }
+      }
+    },
+    "transport.ready" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Registered with APNs" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Зарегистрировано в APNs" } }
+      }
+    },
+    "transport.waiting" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Waiting for APNs registration" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Ожидание регистрации APNs" } }
+      }
+    }
+  },
+  "version" : "1.0"
+}
