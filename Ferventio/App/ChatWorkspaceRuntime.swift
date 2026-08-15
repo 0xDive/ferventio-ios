@@ -86,6 +86,7 @@ final class ChatWorkspaceRuntimePool {
     private var runtimes: [UUID: ChatWorkspaceRuntime] = [:]
     private var connectionReservations: Set<UUID> = []
     private var historyPreferences: ChatHistoryPreferences
+    private var wantsSuspended = false
     private let factory: Factory
 
     init(
@@ -190,15 +191,27 @@ final class ChatWorkspaceRuntimePool {
     }
 
     func suspendAll() async {
+        wantsSuspended = true
         for runtime in runtimes.values where !runtime.isClosed {
             await runtime.chatComposerStore.flush()
+            guard wantsSuspended else {
+                return
+            }
             await runtime.chatStore.suspend()
+            guard wantsSuspended else {
+                await runtime.chatStore.resumeIfNeeded()
+                return
+            }
         }
     }
 
     func resumeAll() async {
+        wantsSuspended = false
         for runtime in runtimes.values where !runtime.isClosed {
             await runtime.chatStore.resumeIfNeeded()
+            guard !wantsSuspended else {
+                return
+            }
         }
     }
 
