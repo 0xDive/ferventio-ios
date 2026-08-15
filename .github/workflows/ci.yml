@@ -114,12 +114,67 @@ jobs:
             build-for-testing
 
       - name: Run application tests
+        shell: bash
         run: |
           xcrun simctl boot "${IOS_SIMULATOR_ID}" || true
           xcrun simctl bootstatus "${IOS_SIMULATOR_ID}" -b
+
+          RESULT_BUNDLE="${RUNNER_TEMP}/FerventioTests.xcresult"
+          TEST_LOG="${RUNNER_TEMP}/FerventioTests.log"
+          rm -rf "${RESULT_BUNDLE}"
+
+          set +e
+          set -o pipefail
           xcodebuild \
             -project Ferventio.xcodeproj \
             -scheme Ferventio \
             -configuration Debug \
             -destination "platform=iOS Simulator,id=${IOS_SIMULATOR_ID}" \
-            test-without-building
+            -resultBundlePath "${RESULT_BUNDLE}" \
+            test-without-building 2>&1 | tee "${TEST_LOG}"
+          TEST_STATUS="${PIPESTATUS[0]}"
+          set -e
+
+          if [[ "${TEST_STATUS}" -ne 0 ]]; then
+            TEST_RESULT_BUNDLE="${RESULT_BUNDLE}" TEST_LOG="${TEST_LOG}" /usr/bin/python3 - <<'PY'
+          import os
+          import subprocess
+          from pathlib import Path
+
+          result_bundle = Path(os.environ["TEST_RESULT_BUNDLE"])
+          test_log = Path(os.environ["TEST_LOG"])
+          details = ""
+
+          if result_bundle.exists():
+              result = subprocess.run(
+                  [
+                      "xcrun",
+                      "xcresulttool",
+                      "get",
+                      "test-results",
+                      "summary",
+                      "--path",
+                      str(result_bundle),
+                  ],
+                  capture_output=True,
+                  text=True,
+              )
+              if result.returncode == 0:
+                  details = result.stdout.strip()
+
+          if not details and test_log.exists():
+              details = test_log.read_text(encoding="utf-8", errors="replace")[-6000:]
+
+          if not details:
+              details = "xcodebuild failed without readable xcresult or log output"
+
+          details = details[-6000:]
+          escaped = (
+              details.replace("%", "%25")
+              .replace("\r", "%0D")
+              .replace("\n", "%0A")
+          )
+          print(f"::error title=iOS test failure::{escaped}")
+          PY
+            exit "${TEST_STATUS}"
+          fi
