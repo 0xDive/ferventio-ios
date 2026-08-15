@@ -42,7 +42,11 @@ final class PushNotificationCoordinator {
             acceptsRegistrationCallbacks = false
             return
         }
+        let requestGeneration = registrationGeneration
         let status = await authorizationService.authorizationStatus()
+        guard registrationGeneration == requestGeneration else {
+            return
+        }
         switch status {
         case .authorized, .provisional, .ephemeral:
             acceptsRegistrationCallbacks = true
@@ -77,6 +81,7 @@ final class PushNotificationCoordinator {
             errorMessage = localized("error.not_authenticated")
             return false
         }
+        let requestGeneration = registrationGeneration
         isWorking = true
         errorMessage = nil
         selfTestSucceeded = nil
@@ -84,6 +89,9 @@ final class PushNotificationCoordinator {
 
         do {
             let granted = try await authorizationService.requestAuthorization()
+            guard registrationGeneration == requestGeneration else {
+                return false
+            }
             guard granted else {
                 acceptsRegistrationCallbacks = false
                 preferences = preferencesStore.save(
@@ -109,6 +117,9 @@ final class PushNotificationCoordinator {
             authorizationService.registerForRemoteNotifications()
             return true
         } catch {
+            guard registrationGeneration == requestGeneration else {
+                return false
+            }
             acceptsRegistrationCallbacks = false
             errorMessage = error.localizedDescription
             return false
@@ -208,6 +219,7 @@ final class PushNotificationCoordinator {
             selfTestSucceeded = false
             return false
         }
+        let requestGeneration = registrationGeneration
         isWorking = true
         errorMessage = nil
         selfTestSucceeded = nil
@@ -215,9 +227,15 @@ final class PushNotificationCoordinator {
 
         do {
             try await registrationService.selfTest()
+            guard registrationGeneration == requestGeneration else {
+                return false
+            }
             selfTestSucceeded = true
             return true
         } catch {
+            guard registrationGeneration == requestGeneration else {
+                return false
+            }
             errorMessage = error.localizedDescription
             selfTestSucceeded = false
             return false
