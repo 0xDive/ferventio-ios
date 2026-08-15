@@ -62,6 +62,41 @@ struct AppEnvironmentTests {
         #expect(!environment.showsAuthenticationError)
     }
 
+    @Test
+    func signOutIgnoresProfileBootstrapThatCompletesForOldSession() async {
+        let grant = makeGrant()
+        let staleUser = TwitchUser(
+            id: grant.accessLease.session.userID,
+            login: grant.accessLease.session.login,
+            displayName: "Stale User",
+            profileImageURL: nil,
+            createdAt: nil,
+            broadcasterType: nil,
+            description: nil
+        )
+        let service = StubAuthService(restoreResult: nil, signInResult: grant)
+        let bootstrap = BlockingTwitchBootstrap()
+        let environment = AppEnvironment(
+            authService: service,
+            twitchBootstrap: bootstrap
+        )
+        await environment.start()
+
+        let signInTask = Task { @MainActor in
+            await environment.signIn()
+        }
+        await bootstrap.waitUntilLoadStarts()
+
+        #expect(environment.state == .signedIn)
+        await environment.signOut()
+        await bootstrap.complete(with: staleUser)
+        await signInTask.value
+
+        #expect(environment.state == .signedOut)
+        #expect(environment.session == nil)
+        #expect(environment.currentUser == nil)
+    }
+
     private func makeGrant() -> AuthenticationGrant {
         AuthenticationGrant(
             backendCredential: BackendSessionCredential(
@@ -157,6 +192,42 @@ private struct StubTwitchBootstrap: TwitchBootstrapping, Sendable {
 
     func resolveChannel(login: String, for grant: AuthenticationGrant) async throws -> ChatChannel {
         ChatChannel(id: "channel", login: login, displayName: login)
+    }
+}
+
+private actor BlockingTwitchBootstrap: TwitchBootstrapping {
+    private var loadStarted = false
+    private var loadStartWaiters: [CheckedContinuation<Void, Never>] = []
+    private var profileContinuation: CheckedContinuation<TwitchUser, Never>?
+
+    func loadCurrentUser(for grant: AuthenticationGrant) async throws -> TwitchUser {
+        await withCheckedContinuation { continuation in
+            profileContinuation = continuation
+            loadStarted = true
+            let waiters = loadStartWaiters
+            loadStartWaiters.removeAll()
+            for waiter in waiters {
+                waiter.resume()
+            }
+        }
+    }
+
+    func resolveChannel(login: String, for grant: AuthenticationGrant) async throws -> ChatChannel {
+        ChatChannel(id: "channel", login: login, displayName: login)
+    }
+
+    func waitUntilLoadStarts() async {
+        guard !loadStarted else {
+            return
+        }
+        await withCheckedContinuation { continuation in
+            loadStartWaiters.append(continuation)
+        }
+    }
+
+    func complete(with user: TwitchUser) {
+        profileContinuation?.resume(returning: user)
+        profileContinuation = nil
     }
 }
 
