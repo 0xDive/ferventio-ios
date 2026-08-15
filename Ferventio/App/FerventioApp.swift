@@ -19,6 +19,7 @@ struct FerventioApp: App {
                         case .active:
                             await environment.applicationDidBecomeActive()
                         case .background:
+                            ChatImagePipeline.shared.removeAllCachedImages()
                             await environment.applicationDidEnterBackground()
                         case .inactive:
                             break
