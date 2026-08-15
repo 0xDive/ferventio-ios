@@ -30,14 +30,32 @@ extension ChatHistoryPersisting {
 }
 
 actor PersistenceChatHistory: ChatHistoryPersisting {
+    typealias SaveBatch = @Sendable ([ChatMessage]) async throws -> Void
+
     static let flushDelay = Duration.milliseconds(250)
 
+    private struct PendingMessage: Sendable {
+        let message: ChatMessage
+        let revision: UInt64
+    }
+
     private let store: PersistenceStore
-    private var pendingMessages: [String: ChatMessage] = [:]
+    private let saveBatch: SaveBatch
+    private let automaticFlushDelay: Duration
+    private var pendingMessages: [String: PendingMessage] = [:]
+    private var nextRevision: UInt64 = 0
     private var flushTask: Task<Void, Never>?
 
-    init(store: PersistenceStore) {
+    init(
+        store: PersistenceStore,
+        saveBatch: SaveBatch? = nil,
+        automaticFlushDelay: Duration = Self.flushDelay
+    ) {
         self.store = store
+        self.automaticFlushDelay = automaticFlushDelay
+        self.saveBatch = saveBatch ?? { messages in
+            try await store.save(messages)
+        }
     }
 
     func recentMessages(channelID: String, limit: Int) async -> [ChatMessage] {
@@ -57,12 +75,16 @@ actor PersistenceChatHistory: ChatHistoryPersisting {
     }
 
     func enqueue(_ message: ChatMessage) async {
-        pendingMessages[Self.key(for: message)] = message
+        nextRevision &+= 1
+        pendingMessages[Self.key(for: message)] = PendingMessage(
+            message: message,
+            revision: nextRevision
+        )
         guard flushTask == nil else {
             return
         }
         flushTask = Task {
-            try? await Task.sleep(for: Self.flushDelay)
+            try? await Task.sleep(for: automaticFlushDelay)
             guard !Task.isCancelled else {
                 return
             }
@@ -97,13 +119,16 @@ actor PersistenceChatHistory: ChatHistoryPersisting {
             return
         }
 
-        let batch = Array(pendingMessages.values)
-        pendingMessages.removeAll(keepingCapacity: true)
+        let batch = pendingMessages
         do {
-            try await store.save(batch)
+            try await saveBatch(batch.values.map(\.message))
+            for (key, saved) in batch
+            where pendingMessages[key]?.revision == saved.revision {
+                pendingMessages.removeValue(forKey: key)
+            }
         } catch {
-            // Persistence is intentionally best-effort. Failed writes must not
-            // affect EventSub connectivity or user-visible chat state.
+            // Persistence remains best-effort for live chat, but failed rows stay
+            // pending so a later enqueue, background, or disconnect flush can retry.
         }
     }
 
