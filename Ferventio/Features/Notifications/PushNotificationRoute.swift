@@ -74,4 +74,10 @@ final class PushNotificationRouteBuffer: @unchecked Sendable {
             return pendingRoute
         }
     }
+
+    func clear() {
+        lock.withLock {
+            pendingRoute = nil
+        }
+    }
 }
