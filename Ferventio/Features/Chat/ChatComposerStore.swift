@@ -83,6 +83,9 @@ final class ChatComposerStore {
         if let previousChannelID = activeChannelID,
            previousChannelID != channelID {
             await flushDraft(channelID: previousChannelID)
+            guard generation == currentGeneration else {
+                return ""
+            }
         }
 
         draftSaveTask?.cancel()
@@ -129,6 +132,7 @@ final class ChatComposerStore {
     }
 
     func recordSuccessfulSend(channelID: String, text: String) async {
+        let currentGeneration = generation
         let nowMilliseconds = Int64(
             (Date().timeIntervalSince1970 * 1_000).rounded(.towardZero)
         )
@@ -139,19 +143,22 @@ final class ChatComposerStore {
             sentAtMilliseconds: nowMilliseconds
         )
 
-        draftSaveTask?.cancel()
-        draftSaveTask = nil
-        pendingDrafts[channelID] = ""
-        await persistence.deleteDraft(channelID: channelID)
-        await persistence.recordSentMessage(entry, keepingLatest: Self.maximumSentHistory)
-
-        guard activeChannelID == channelID else {
-            return
+        if activeChannelID == channelID {
+            draftSaveTask?.cancel()
+            draftSaveTask = nil
+            await flushDraft(channelID: channelID)
         }
-        sentHistory = await persistence.sentMessages(
+        await persistence.recordSentMessage(entry, keepingLatest: Self.maximumSentHistory)
+        let history = await persistence.sentMessages(
             channelID: channelID,
             limit: Self.visibleSentHistoryLimit
         )
+
+        guard generation == currentGeneration,
+              activeChannelID == channelID else {
+            return
+        }
+        sentHistory = history
     }
 
     func flush() async {
