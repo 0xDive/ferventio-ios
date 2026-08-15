@@ -54,15 +54,19 @@ final class FerventioAppDelegate: NSObject, UIApplicationDelegate, UNUserNotific
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse
     ) async {
-        let userInfo = response.notification.request.content.userInfo
-        let route = PushNotificationRoute(userInfo: userInfo)
-        if let route {
-            PushNotificationRouteBuffer.shared.store(route)
+        guard let route = PushNotificationRoute(
+            userInfo: response.notification.request.content.userInfo
+        ) else {
+            return
         }
-        NotificationCenter.default.post(
-            name: .ferventioDidOpenRemoteNotification,
-            object: route,
-            userInfo: userInfo
-        )
+
+        PushNotificationRouteBuffer.shared.store(route)
+        await MainActor.run {
+            NotificationCenter.default.post(
+                name: .ferventioDidOpenRemoteNotification,
+                object: route,
+                userInfo: route.notificationUserInfo
+            )
+        }
     }
 }
