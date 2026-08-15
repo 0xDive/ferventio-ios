@@ -279,6 +279,8 @@ private struct ChatFragmentView: View {
 }
 
 private struct RemoteChatImage: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     let url: URL?
     let fallbackText: String
     let accessibilityLabel: String
@@ -301,20 +303,27 @@ private struct RemoteChatImage: View {
         }
         .frame(width: 28, height: 28)
         .accessibilityLabel(Text(accessibilityLabel))
-        .task(id: url) {
+        .task(id: requestID) {
             asset = nil
             loadedURL = nil
             failedURL = nil
             guard let url else {
                 return
             }
-            if let image = await ChatImagePipeline.shared.image(for: url), !Task.isCancelled {
+            if let image = await ChatImagePipeline.shared.image(
+                for: url,
+                allowsAnimation: !reduceMotion
+            ), !Task.isCancelled {
                 asset = image
                 loadedURL = url
             } else if !Task.isCancelled {
                 failedURL = url
             }
         }
+    }
+
+    private var requestID: String {
+        "\(url?.absoluteString ?? "nil")#animation=\(!reduceMotion)"
     }
 }
 
