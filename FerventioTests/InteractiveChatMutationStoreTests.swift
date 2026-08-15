@@ -73,6 +73,38 @@ struct InteractiveChatMutationStoreTests {
         #expect(store.status == nil)
     }
 
+    @Test
+    func clearInvalidatesOldMutationWithoutClearingNewStatus() async {
+        let client = SequencedInteractiveMutator()
+        let store = InteractiveChatMutationStore(client: client)
+
+        async let oldResult = store.createPoll(
+            channel: ownChannel(),
+            lease: makeLease(scopes: ["channel:manage:polls"]),
+            draft: pollDraft()
+        )
+        await client.waitUntilCallCount(1)
+
+        store.clear()
+        #expect(store.status == nil)
+
+        async let newResult = store.createPoll(
+            channel: ownChannel(),
+            lease: makeLease(scopes: ["channel:manage:polls"]),
+            draft: pollDraft()
+        )
+        await client.waitUntilCallCount(2)
+        #expect(store.status?.inFlight == true)
+
+        await client.releaseCall(1)
+        #expect(!(await oldResult))
+        #expect(store.status?.inFlight == true)
+
+        await client.releaseCall(2)
+        #expect(await newResult)
+        #expect(store.status == nil)
+    }
+
     private func ownChannel() -> ChatChannel {
         ChatChannel(id: "user", login: "tester", displayName: "Tester")
     }
@@ -162,4 +194,33 @@ private actor BlockingInteractiveMutator: InteractiveChatMutating {
     func endPrediction(clientID: String, accessToken: String, broadcasterID: String, predictionID: String, status: PredictionEndStatus, winningOutcomeID: String?) async throws {
         calls += 1
     }
+}
+
+private actor SequencedInteractiveMutator: InteractiveChatMutating {
+    private var calls = 0
+    private var releasedCalls: Set<Int> = []
+
+    func waitUntilCallCount(_ expected: Int) async {
+        while calls < expected {
+            await Task.yield()
+        }
+    }
+
+    func releaseCall(_ call: Int) {
+        releasedCalls.insert(call)
+    }
+
+    func createPoll(clientID: String, accessToken: String, broadcasterID: String, draft: PollDraft) async throws {
+        calls += 1
+        let call = calls
+        while !releasedCalls.contains(call) {
+            await Task.yield()
+        }
+    }
+
+    func endPoll(clientID: String, accessToken: String, broadcasterID: String, pollID: String, status: PollEndStatus) async throws {}
+
+    func createPrediction(clientID: String, accessToken: String, broadcasterID: String, draft: PredictionDraft) async throws {}
+
+    func endPrediction(clientID: String, accessToken: String, broadcasterID: String, predictionID: String, status: PredictionEndStatus, winningOutcomeID: String?) async throws {}
 }
