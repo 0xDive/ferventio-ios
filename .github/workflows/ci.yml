@@ -76,12 +76,52 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             build
 
+      - name: Select iOS Simulator
+        run: |
+          IOS_SIMULATOR_ID="$(xcrun simctl list devices available --json | /usr/bin/python3 -c '
+          import json, sys
+
+          payload = json.load(sys.stdin)
+          candidates = []
+          for runtime, devices in payload.get("devices", {}).items():
+              marker = "SimRuntime.iOS-"
+              if marker not in runtime:
+                  continue
+              version = tuple(
+                  int(component)
+                  for component in runtime.split(marker, 1)[1].split("-")
+                  if component.isdigit()
+              )
+              for device in devices:
+                  name = device.get("name", "")
+                  if device.get("isAvailable", True) and name.startswith("iPhone"):
+                      candidates.append((version, "Pro" in name, name, device["udid"]))
+
+          if not candidates:
+              raise SystemExit("No available iPhone Simulator found")
+          print(max(candidates)[3])
+          ')"
+          echo "IOS_SIMULATOR_ID=${IOS_SIMULATOR_ID}" >> "$GITHUB_ENV"
+          echo "Using iOS Simulator ${IOS_SIMULATOR_ID}"
+
       - name: Build application tests
         run: |
           xcodebuild \
             -project Ferventio.xcodeproj \
             -scheme Ferventio \
             -configuration Debug \
-            -destination 'generic/platform=iOS Simulator' \
+            -destination "platform=iOS Simulator,id=${IOS_SIMULATOR_ID}" \
             CODE_SIGNING_ALLOWED=NO \
             build-for-testing
+
+      - name: Run application tests
+        run: |
+          xcrun simctl boot "${IOS_SIMULATOR_ID}" || true
+          xcrun simctl bootstatus "${IOS_SIMULATOR_ID}" -b
+          xcodebuild \
+            -project Ferventio.xcodeproj \
+            -scheme Ferventio \
+            -configuration Debug \
+            -destination "platform=iOS Simulator,id=${IOS_SIMULATOR_ID}" \
+            CODE_SIGNING_ALLOWED=NO \
+            test-without-building
