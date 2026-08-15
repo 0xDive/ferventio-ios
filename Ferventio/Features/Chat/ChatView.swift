@@ -451,12 +451,15 @@ struct ChatView: View {
         }
         let text = store.composerText
 
-        await store.sendCurrentMessage()
+        let didSend = await store.sendCurrentMessage()
 
-        guard store.channel?.id == channelID,
-              !store.showsSendError else {
+        guard didSend,
+              store.channel?.id == channelID else {
             return
         }
+        // Synchronize the actual composer contents before recording history.
+        // The user may already have typed the next message while the send was in flight.
+        composerStore.updateDraft(channelID: channelID, text: store.composerText)
         await composerStore.recordSuccessfulSend(channelID: channelID, text: text)
     }
 
