@@ -66,4 +66,25 @@ struct PushNotificationRouteTests {
         #expect(route.messageID == nil)
         #expect(route.destination == nil)
     }
+
+    @Test
+    func bufferKeepsOnlyLatestRouteAndConsumesItOnce() throws {
+        let buffer = PushNotificationRouteBuffer()
+        let first = try #require(
+            PushNotificationRoute(
+                userInfo: ["ferventio": ["channelLogin": "first"]]
+            )
+        )
+        let second = try #require(
+            PushNotificationRoute(
+                userInfo: ["ferventio": ["channelLogin": "second"]]
+            )
+        )
+
+        buffer.store(first)
+        buffer.store(second)
+
+        #expect(buffer.takeLatest() == second)
+        #expect(buffer.takeLatest() == nil)
+    }
 }
