@@ -63,10 +63,10 @@ struct PushNotificationRouteSessionPolicy {
     }
 
     static func shouldClearPendingRoute(
-        previousUserID: String?,
-        currentUserID: String?
+        previousState: AppState,
+        currentState: AppState
     ) -> Bool {
-        previousUserID != nil && currentUserID == nil
+        previousState != .signedOut && currentState == .signedOut
     }
 }
 
