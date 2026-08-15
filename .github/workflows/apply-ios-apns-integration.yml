@@ -1,0 +1,241 @@
+name: Apply iOS APNs Integration
+
+on:
+  push:
+    branches:
+      - feat/ios-apns
+    paths:
+      - .github/workflows/apply-ios-apns-integration.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: feat/ios-apns
+          fetch-depth: 0
+      - name: Apply integration patch
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace(path, old, new):
+              target = Path(path)
+              text = target.read_text(encoding="utf-8")
+              if old not in text:
+                  raise SystemExit(f"expected block not found in {path}: {old[:80]!r}")
+              target.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+          replace(
+              "Ferventio/App/AppEnvironment.swift",
+              '''    func chatHistoryPreferences() -> ChatHistoryPreferences {
+          ''',
+              '''    func authenticationGrantForPush() -> AuthenticationGrant? {
+                  authenticationGrant
+              }
+
+              func chatHistoryPreferences() -> ChatHistoryPreferences {
+          ''',
+          )
+
+          replace(
+              "Ferventio/Features/Root/RootView.swift",
+              '''import FerventioDomain
+          import SwiftUI
+          ''',
+              '''import Foundation
+          import FerventioDomain
+          import SwiftUI
+          ''',
+          )
+          replace(
+              "Ferventio/Features/Root/RootView.swift",
+              '''    @State private var newWorkspaceLogin = ""
+              @State private var workspaceRegistry = ChatWorkspaceRegistryStore()
+          ''',
+              '''    @State private var newWorkspaceLogin = ""
+              @State private var pushNotificationCoordinator = PushNotificationCoordinator()
+              @State private var workspaceRegistry = ChatWorkspaceRegistryStore()
+          ''',
+          )
+          replace(
+              "Ferventio/Features/Root/RootView.swift",
+              '''                workspaceSnapshot: workspaceSnapshot,
+              save: { preferences, presentationPreferences in
+          ''',
+              '''                workspaceSnapshot: workspaceSnapshot,
+              pushNotificationCoordinator: pushNotificationCoordinator,
+              authenticationGrant: environment.authenticationGrantForPush(),
+              pushChannelLogins: workspaceRegistry.workspaces.map(\\.login),
+              save: { preferences, presentationPreferences in
+          ''',
+          )
+          replace(
+              "Ferventio/Features/Root/RootView.swift",
+              '''                    Task {
+                              await workspaceRuntimePool.removeAll()
+                              await environment.signOut()
+                          }
+          ''',
+              '''                    Task {
+                              await workspaceRuntimePool.removeAll()
+                              await pushNotificationCoordinator.signedOut()
+                              await environment.signOut()
+                          }
+          ''',
+          )
+          replace(
+              "Ferventio/Features/Root/RootView.swift",
+              '''        .onChange(of: environment.session?.userID, initial: true) { _, userID in
+                  guard userID != nil else {
+                      return
+                  }
+                  Task { await prepareWorkspaceRuntimes() }
+              }
+              .onChange(of: scenePhase) { _, phase in
+          ''',
+              '''        .onChange(of: environment.session?.userID, initial: true) { _, userID in
+                  guard userID != nil else {
+                      return
+                  }
+                  Task {
+                      await prepareWorkspaceRuntimes()
+                      await pushNotificationCoordinator.restoreIfNeeded(
+                          grant: environment.authenticationGrantForPush(),
+                          channelLogins: workspaceRegistry.workspaces.map(\\.login)
+                      )
+                  }
+              }
+              .onChange(of: workspaceRegistry.workspaces.map(\\.login)) { _, logins in
+                  Task {
+                      await pushNotificationCoordinator.workspaceChannelsChanged(
+                          grant: environment.authenticationGrantForPush(),
+                          channelLogins: logins
+                      )
+                  }
+              }
+              .onReceive(
+                  NotificationCenter.default.publisher(
+                      for: .ferventioDidRegisterAPNsDeviceToken
+                  )
+              ) { notification in
+                  guard let deviceToken = notification.object as? Data else {
+                      return
+                  }
+                  Task {
+                      await pushNotificationCoordinator.receiveDeviceToken(
+                          deviceToken,
+                          grant: environment.authenticationGrantForPush(),
+                          channelLogins: workspaceRegistry.workspaces.map(\\.login)
+                      )
+                  }
+              }
+              .onReceive(
+                  NotificationCenter.default.publisher(
+                      for: .ferventioDidFailAPNsRegistration
+                  )
+              ) { notification in
+                  if let error = notification.object as? NSError {
+                      pushNotificationCoordinator.registrationFailed(error)
+                  }
+              }
+              .onChange(of: scenePhase) { _, phase in
+          ''',
+          )
+
+          replace(
+              "Ferventio/Features/Settings/ChatHistorySettingsView.swift",
+              '''    let save: (ChatHistoryPreferences, ChatPresentationPreferences) async -> Void
+              let applyWorkspaceImport: (SettingsBackupImportPlan) async -> Void
+          ''',
+              '''    let save: (ChatHistoryPreferences, ChatPresentationPreferences) async -> Void
+              let applyWorkspaceImport: (SettingsBackupImportPlan) async -> Void
+              let pushNotificationCoordinator: PushNotificationCoordinator
+              let authenticationGrant: AuthenticationGrant?
+              let pushChannelLogins: [String]
+          ''',
+          )
+          replace(
+              "Ferventio/Features/Settings/ChatHistorySettingsView.swift",
+              '''        workspaceSnapshot: ChatWorkspaceRegistrySnapshot,
+              save: @escaping (ChatHistoryPreferences, ChatPresentationPreferences) async -> Void,
+          ''',
+              '''        workspaceSnapshot: ChatWorkspaceRegistrySnapshot,
+              pushNotificationCoordinator: PushNotificationCoordinator,
+              authenticationGrant: AuthenticationGrant?,
+              pushChannelLogins: [String],
+              save: @escaping (ChatHistoryPreferences, ChatPresentationPreferences) async -> Void,
+          ''',
+          )
+          replace(
+              "Ferventio/Features/Settings/ChatHistorySettingsView.swift",
+              '''        self.save = save
+              self.applyWorkspaceImport = applyWorkspaceImport
+              initialWorkspaceSnapshot = workspaceSnapshot
+          ''',
+              '''        self.save = save
+              self.applyWorkspaceImport = applyWorkspaceImport
+              self.pushNotificationCoordinator = pushNotificationCoordinator
+              self.authenticationGrant = authenticationGrant
+              self.pushChannelLogins = pushChannelLogins
+              initialWorkspaceSnapshot = workspaceSnapshot
+          ''',
+          )
+          replace(
+              "Ferventio/Features/Settings/ChatHistorySettingsView.swift",
+              '''                Section {
+                      Button {
+                          showsBackupImporter = true
+          ''',
+              '''                Section {
+                      NavigationLink {
+                          PushNotificationSettingsView(
+                              coordinator: pushNotificationCoordinator,
+                              grant: authenticationGrant,
+                              channelLogins: pushChannelLogins
+                          )
+                      } label: {
+                          Label(
+                              pushLocalized("open"),
+                              systemImage: "bell.badge"
+                          )
+                      }
+                  } footer: {
+                      Text(pushLocalized("settings.footer"))
+                  }
+
+                  Section {
+                      Button {
+                          showsBackupImporter = true
+          ''',
+          )
+          replace(
+              "Ferventio/Features/Settings/ChatHistorySettingsView.swift",
+              '''    private func cloudLocalized(_ key: String.LocalizationValue) -> String {
+                  String(localized: key, table: "CloudSettings")
+              }
+
+              private func filtersLocalized''',
+              '''    private func cloudLocalized(_ key: String.LocalizationValue) -> String {
+                  String(localized: key, table: "CloudSettings")
+              }
+
+              private func pushLocalized(_ key: String.LocalizationValue) -> String {
+                  String(localized: key, table: "PushNotifications")
+              }
+
+              private func filtersLocalized''',
+          )
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Ferventio/App/AppEnvironment.swift \
+            Ferventio/Features/Root/RootView.swift \
+            Ferventio/Features/Settings/ChatHistorySettingsView.swift
+          git rm .github/workflows/apply-ios-apns-integration.yml
+          git commit -m "feat: integrate iOS push notifications"
+          git push origin HEAD:feat/ios-apns
