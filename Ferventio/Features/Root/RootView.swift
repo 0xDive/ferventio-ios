@@ -124,15 +124,15 @@ struct RootView: View {
                 )
             }
         }
-        .onChange(of: environment.session?.userID, initial: true) { previousUserID, userID in
+        .onChange(of: environment.state, initial: true) { previousState, state in
             if PushNotificationRouteSessionPolicy.shouldClearPendingRoute(
-                previousUserID: previousUserID,
-                currentUserID: userID
+                previousState: previousState,
+                currentState: state
             ) {
                 pendingPushRoute = nil
                 PushNotificationRouteBuffer.shared.clear()
             }
-            guard userID != nil else {
+            guard state == .signedIn else {
                 return
             }
             Task {
