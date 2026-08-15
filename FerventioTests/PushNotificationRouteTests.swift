@@ -97,29 +97,29 @@ struct PushNotificationRouteTests {
     }
 
     @Test
-    func routeSessionPolicyClearsOnlyOnAuthenticatedSignOutTransition() {
+    func routeSessionPolicyClearsWhenAuthenticationEnds() {
         #expect(
             PushNotificationRouteSessionPolicy.shouldClearPendingRoute(
-                previousUserID: "old-user",
-                currentUserID: nil
+                previousState: .signedIn,
+                currentState: .signedOut
+            )
+        )
+        #expect(
+            PushNotificationRouteSessionPolicy.shouldClearPendingRoute(
+                previousState: .launching,
+                currentState: .signedOut
             )
         )
         #expect(
             !PushNotificationRouteSessionPolicy.shouldClearPendingRoute(
-                previousUserID: nil,
-                currentUserID: nil
+                previousState: .launching,
+                currentState: .signedIn
             )
         )
         #expect(
             !PushNotificationRouteSessionPolicy.shouldClearPendingRoute(
-                previousUserID: nil,
-                currentUserID: "new-user"
-            )
-        )
-        #expect(
-            !PushNotificationRouteSessionPolicy.shouldClearPendingRoute(
-                previousUserID: "old-user",
-                currentUserID: "new-user"
+                previousState: .signedOut,
+                currentState: .signedOut
             )
         )
     }
