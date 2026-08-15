@@ -281,12 +281,13 @@ final class ChatStore {
         replyTarget = nil
     }
 
-    func sendCurrentMessage() async {
+    @discardableResult
+    func sendCurrentMessage() async -> Bool {
         guard canSend,
               let channel,
               let lease = activeLease,
               let author = localAuthor else {
-            return
+            return false
         }
 
         let currentSendGeneration = sendGeneration
@@ -332,7 +333,7 @@ final class ChatStore {
                 replyParentMessageID: replyParentMessageID
             )
             guard sendGeneration == currentSendGeneration else {
-                return
+                return false
             }
             guard result.isSent, let serverMessageID = result.messageID else {
                 markOptimisticMessage(
@@ -342,12 +343,13 @@ final class ChatStore {
                     error: result.dropReason?.message ?? result.dropReason?.code
                 )
                 showsSendError = true
-                return
+                return false
             }
             reconcileOptimisticMessage(nonce: nonce, serverMessageID: serverMessageID)
+            return true
         } catch {
             guard sendGeneration == currentSendGeneration else {
-                return
+                return false
             }
             markOptimisticMessage(
                 nonce: nonce,
@@ -356,6 +358,7 @@ final class ChatStore {
                 error: String(describing: error)
             )
             showsSendError = true
+            return false
         }
     }
 
