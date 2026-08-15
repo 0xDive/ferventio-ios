@@ -70,6 +70,56 @@ struct PushNotificationCoordinatorTests {
     }
 
     @Test
+    func registrationDuringSignOutWaitsForCleanupBoundary() async {
+        let fixture = makeFixture(blockFirstUnregister: true)
+        let oldGrant = makeGrant(userID: "old-user", token: "old-session")
+        let newGrant = makeGrant(userID: "new-user", token: "new-session")
+
+        let oldRegistrationTask = Task { @MainActor in
+            await fixture.coordinator.receiveDeviceToken(
+                Data([0x01]),
+                grant: oldGrant,
+                channelLogins: ["old-channel"]
+            )
+        }
+        await fixture.registrationService.waitUntilFirstRegisterStarts()
+
+        let signOutTask = Task { @MainActor in
+            await fixture.coordinator.signedOut()
+        }
+        await fixture.registrationService.waitUntilFirstUnregisterStarts()
+
+        await fixture.coordinator.receiveDeviceToken(
+            Data([0x02]),
+            grant: newGrant,
+            channelLogins: ["new-channel"]
+        )
+        #expect(await fixture.registrationService.registrationCalls().count == 1)
+
+        await fixture.registrationService.completeFirstRegister()
+        await oldRegistrationTask.value
+        #expect(await fixture.registrationService.registrationCalls().count == 1)
+        #expect(await fixture.registrationService.unregisterCallCount() == 2)
+
+        await fixture.registrationService.completeFirstUnregister()
+        await signOutTask.value
+
+        #expect(!fixture.coordinator.isTransportRegistered)
+        await fixture.coordinator.receiveDeviceToken(
+            Data([0x03]),
+            grant: newGrant,
+            channelLogins: ["new-channel"]
+        )
+
+        let registrations = await fixture.registrationService.registrationCalls()
+        #expect(registrations.count == 2)
+        #expect(registrations[1].userID == "new-user")
+        #expect(registrations[1].deviceToken == Data([0x03]))
+        #expect(fixture.coordinator.isTransportRegistered)
+        fixture.cleanup()
+    }
+
+    @Test
     func newerDeviceTokenIsReplayedAfterInFlightRegistration() async {
         let fixture = makeFixture()
         let grant = makeGrant(userID: "user", token: "session")
@@ -99,7 +149,7 @@ struct PushNotificationCoordinatorTests {
         fixture.cleanup()
     }
 
-    private func makeFixture() -> PushCoordinatorFixture {
+    private func makeFixture(blockFirstUnregister: Bool = false) -> PushCoordinatorFixture {
         let suiteName = "PushNotificationCoordinatorTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         let preferencesStore = PushNotificationPreferencesStore(defaults: defaults)
@@ -111,7 +161,9 @@ struct PushNotificationCoordinatorTests {
                 channelActivity: false
             )
         )
-        let registrationService = BlockingPushRegistrationService()
+        let registrationService = BlockingPushRegistrationService(
+            blockFirstUnregister: blockFirstUnregister
+        )
         let authorizationService = StubPushNotificationAuthorizationService()
         let coordinator = PushNotificationCoordinator(
             preferencesStore: preferencesStore,
@@ -170,11 +222,19 @@ private struct RecordedPushRegistration: Equatable, Sendable {
 }
 
 private actor BlockingPushRegistrationService: PushRegistering {
+    private let blockFirstUnregister: Bool
     private var registrations: [RecordedPushRegistration] = []
     private var unregisterCalls = 0
     private var firstRegisterStarted = false
     private var firstRegisterWaiters: [CheckedContinuation<Void, Never>] = []
     private var firstRegisterContinuation: CheckedContinuation<Void, Never>?
+    private var firstUnregisterStarted = false
+    private var firstUnregisterWaiters: [CheckedContinuation<Void, Never>] = []
+    private var firstUnregisterContinuation: CheckedContinuation<Void, Never>?
+
+    init(blockFirstUnregister: Bool = false) {
+        self.blockFirstUnregister = blockFirstUnregister
+    }
 
     func register(
         deviceToken: Data,
@@ -206,6 +266,19 @@ private actor BlockingPushRegistrationService: PushRegistering {
 
     func unregister() async throws {
         unregisterCalls += 1
+        guard blockFirstUnregister, unregisterCalls == 1 else {
+            return
+        }
+
+        firstUnregisterStarted = true
+        let waiters = firstUnregisterWaiters
+        firstUnregisterWaiters.removeAll()
+        for waiter in waiters {
+            waiter.resume()
+        }
+        await withCheckedContinuation { continuation in
+            firstUnregisterContinuation = continuation
+        }
     }
 
     func selfTest() async throws {}
@@ -222,6 +295,20 @@ private actor BlockingPushRegistrationService: PushRegistering {
     func completeFirstRegister() {
         firstRegisterContinuation?.resume()
         firstRegisterContinuation = nil
+    }
+
+    func waitUntilFirstUnregisterStarts() async {
+        guard firstUnregisterStarted else {
+            await withCheckedContinuation { continuation in
+                firstUnregisterWaiters.append(continuation)
+            }
+            return
+        }
+    }
+
+    func completeFirstUnregister() {
+        firstUnregisterContinuation?.resume()
+        firstUnregisterContinuation = nil
     }
 
     func registrationCalls() -> [RecordedPushRegistration] {
