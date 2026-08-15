@@ -36,9 +36,9 @@ jobs:
           STATUS="${PIPESTATUS[0]}"
           set -e
           if [[ "$STATUS" -ne 0 ]]; then
-            echo "--- last 80 build log lines ---"
-            tail -n 80 "$LOG"
-            tail -n 80 "$LOG" \
+            echo "--- last 100 build log lines ---"
+            tail -n 100 "$LOG"
+            tail -n 100 "$LOG" \
               | while IFS= read -r line; do
                   [[ -z "$line" ]] && continue
                   line="${line//'%'/'%25'}"
