@@ -47,8 +47,9 @@ struct ChatStoreSendRaceTests {
                 )
             )
         )
-        await sendTask.value
+        let didSend = await sendTask.value
 
+        #expect(!didSend)
         #expect(store.connectionState == .connected)
         #expect(!store.isSending)
         #expect(!store.showsSendError)
@@ -92,8 +93,9 @@ struct ChatStoreSendRaceTests {
                 dropReason: nil
             )
         )
-        await sendTask.value
+        let didSend = await sendTask.value
 
+        #expect(didSend)
         #expect(!store.isSending)
         #expect(!store.showsSendError)
         #expect(store.messages.count == 1)
