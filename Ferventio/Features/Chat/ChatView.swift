@@ -21,6 +21,7 @@ struct ChatView: View {
 
     @State private var hasPositionedInitialFeed = false
     @State private var feedScrollPosition: String?
+    @State private var unreadLiveMessageCount = 0
     @State private var sheetRequest: ChatSheetRequest?
 
     private static let feedBottomID = "__ferventio_feed_bottom__"
@@ -44,6 +45,7 @@ struct ChatView: View {
             historyPager.prepare(channelID: channelID)
             hasPositionedInitialFeed = false
             feedScrollPosition = Self.feedBottomID
+            unreadLiveMessageCount = 0
             sheetRequest = nil
             Task {
                 let draft = await composerStore.activate(channelID: channelID)
@@ -202,21 +204,55 @@ struct ChatView: View {
                         Button {
                             proxy.scrollTo(Self.feedBottomID, anchor: .bottom)
                             feedScrollPosition = Self.feedBottomID
+                            unreadLiveMessageCount = 0
                         } label: {
-                            Label("chat.jump_to_live", systemImage: "arrow.down.to.line")
+                            HStack(spacing: 6) {
+                                Label("chat.jump_to_live", systemImage: "arrow.down.to.line")
+                                if unreadLiveMessageCount > 0 {
+                                    Text(unreadLiveMessageCount > 999 ? "999+" : "\(unreadLiveMessageCount)")
+                                        .font(.caption2.weight(.bold))
+                                        .monospacedDigit()
+                                        .padding(.horizontal, 5)
+                                        .padding(.vertical, 2)
+                                        .background(.ultraThinMaterial, in: Capsule())
+                                        .accessibilityHidden(true)
+                                }
+                            }
                         }
+                        .accessibilityLabel(Text("chat.jump_to_live"))
                         .buttonStyle(.borderedProminent)
                         .controlSize(.small)
                         .padding(12)
                     }
                 }
-                .onChange(of: visibleMessages.last?.id, initial: true) { _, messageID in
-                    guard messageID != nil else { return }
+                .onChange(of: feedScrollPosition) { _, position in
+                    if position == Self.feedBottomID {
+                        unreadLiveMessageCount = 0
+                    }
+                }
+                .onChange(of: visibleMessages.last?.id, initial: true) { previousID, messageID in
+                    guard let messageID else { return }
                     let shouldFollowLive = !hasPositionedInitialFeed
                         || feedScrollPosition == Self.feedBottomID
                     if shouldFollowLive {
                         proxy.scrollTo(Self.feedBottomID, anchor: .bottom)
                         feedScrollPosition = Self.feedBottomID
+                        unreadLiveMessageCount = 0
+                    } else if let previousID, previousID != messageID {
+                        let newMessageCount: Int
+                        if let previousIndex = visibleMessages.lastIndex(where: { $0.id == previousID }) {
+                            let nextIndex = visibleMessages.index(after: previousIndex)
+                            newMessageCount = visibleMessages.distance(
+                                from: nextIndex,
+                                to: visibleMessages.endIndex
+                            )
+                        } else {
+                            newMessageCount = 1
+                        }
+                        unreadLiveMessageCount = min(
+                            9_999,
+                            unreadLiveMessageCount + max(1, newMessageCount)
+                        )
                     }
                     hasPositionedInitialFeed = true
                 }
