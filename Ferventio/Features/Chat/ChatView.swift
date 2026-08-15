@@ -20,7 +20,10 @@ struct ChatView: View {
     let connect: () async -> Void
 
     @State private var hasPositionedInitialFeed = false
+    @State private var feedScrollPosition: String?
     @State private var sheetRequest: ChatSheetRequest?
+
+    private static let feedBottomID = "__ferventio_feed_bottom__"
 
     var body: some View {
         VStack(spacing: 0) {
@@ -40,6 +43,7 @@ struct ChatView: View {
         .onChange(of: store.channel?.id, initial: true) { _, channelID in
             historyPager.prepare(channelID: channelID)
             hasPositionedInitialFeed = false
+            feedScrollPosition = Self.feedBottomID
             sheetRequest = nil
             Task {
                 let draft = await composerStore.activate(channelID: channelID)
@@ -181,13 +185,25 @@ struct ChatView: View {
                                 highlightedMessageIDs: projection.highlightedMessageIDs
                             )
                         }
+
+                        Color.clear
+                            .frame(height: 1)
+                            .id(Self.feedBottomID)
+                            .accessibilityHidden(true)
                     }
+                    .scrollTargetLayout()
                     .padding(.horizontal, 12)
                     .padding(.vertical, 10)
                 }
+                .scrollPosition(id: $feedScrollPosition, anchor: .bottom)
                 .onChange(of: visibleMessages.last?.id, initial: true) { _, messageID in
-                    guard let messageID else { return }
-                    proxy.scrollTo(messageID, anchor: .bottom)
+                    guard messageID != nil else { return }
+                    let shouldFollowLive = !hasPositionedInitialFeed
+                        || feedScrollPosition == Self.feedBottomID
+                    if shouldFollowLive {
+                        proxy.scrollTo(Self.feedBottomID, anchor: .bottom)
+                        feedScrollPosition = Self.feedBottomID
+                    }
                     hasPositionedInitialFeed = true
                 }
             }
