@@ -17,12 +17,14 @@ extension TwitchInteractiveMutationAPIClient: InteractiveChatMutating {}
 final class InteractiveChatMutationStore {
     private(set) var status: InteractiveMutationStatus?
     @ObservationIgnored private let client: any InteractiveChatMutating
+    @ObservationIgnored private var generation: UInt64 = 0
 
     init(client: (any InteractiveChatMutating)? = nil) {
         self.client = client ?? TwitchInteractiveMutationAPIClient()
     }
 
     func clear() {
+        generation &+= 1
         status = nil
     }
 
@@ -108,15 +110,25 @@ final class InteractiveChatMutationStore {
             return false
         }
 
+        let operationGeneration = generation
         status = InteractiveMutationStatus(kind: kind)
         do {
             try await operation()
+            guard generation == operationGeneration else {
+                return false
+            }
             status = nil
             return true
         } catch is CancellationError {
+            guard generation == operationGeneration else {
+                return false
+            }
             status = nil
             return false
         } catch {
+            guard generation == operationGeneration else {
+                return false
+            }
             let classified = Self.classify(error)
             status = InteractiveMutationStatus(
                 kind: kind,
