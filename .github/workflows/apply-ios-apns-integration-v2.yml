@@ -1,0 +1,197 @@
+name: Apply iOS APNs Integration V2
+
+on:
+  push:
+    branches:
+      - feat/ios-apns
+    paths:
+      - .github/workflows/apply-ios-apns-integration-v2.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: feat/ios-apns
+          fetch-depth: 0
+      - name: Apply integration patch
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def read(path):
+              return Path(path).read_text(encoding="utf-8")
+
+          def write(path, text):
+              Path(path).write_text(text, encoding="utf-8")
+
+          def insert_before(path, anchor, insertion, marker):
+              text = read(path)
+              if marker in text:
+                  return
+              if anchor not in text:
+                  raise SystemExit(f"anchor not found in {path}: {anchor!r}")
+              write(path, text.replace(anchor, insertion + anchor, 1))
+
+          def insert_after(path, anchor, insertion, marker):
+              text = read(path)
+              if marker in text:
+                  return
+              if anchor not in text:
+                  raise SystemExit(f"anchor not found in {path}: {anchor!r}")
+              write(path, text.replace(anchor, anchor + insertion, 1))
+
+          app_env = "Ferventio/App/AppEnvironment.swift"
+          insert_before(
+              app_env,
+              "    func chatHistoryPreferences() -> ChatHistoryPreferences {\n",
+              "    func authenticationGrantForPush() -> AuthenticationGrant? {\n        authenticationGrant\n    }\n\n",
+              "func authenticationGrantForPush()",
+          )
+
+          root = "Ferventio/Features/Root/RootView.swift"
+          text = read(root)
+          if not text.startswith("import Foundation\n"):
+              write(root, "import Foundation\n" + text)
+          insert_before(
+              root,
+              "    @State private var workspaceRegistry = ChatWorkspaceRegistryStore()\n",
+              "    @State private var pushNotificationCoordinator = PushNotificationCoordinator()\n",
+              "pushNotificationCoordinator = PushNotificationCoordinator()",
+          )
+          insert_after(
+              root,
+              "                workspaceSnapshot: workspaceSnapshot,\n",
+              "                pushNotificationCoordinator: pushNotificationCoordinator,\n                authenticationGrant: environment.authenticationGrantForPush(),\n                pushChannelLogins: workspaceRegistry.workspaces.map(\\.login),\n",
+              "pushNotificationCoordinator: pushNotificationCoordinator",
+          )
+
+          text = read(root)
+          old = "                        await workspaceRuntimePool.removeAll()\n                        await environment.signOut()\n"
+          new = "                        await workspaceRuntimePool.removeAll()\n                        await pushNotificationCoordinator.signedOut()\n                        await environment.signOut()\n"
+          if "await pushNotificationCoordinator.signedOut()" not in text:
+              if old not in text:
+                  raise SystemExit("sign-out anchor not found")
+              write(root, text.replace(old, new, 1))
+
+          text = read(root)
+          if "ferventioDidRegisterAPNsDeviceToken" not in text:
+              anchor = "        .onChange(of: scenePhase) { _, phase in\n"
+              insertion = '''        .onChange(of: workspaceRegistry.workspaces.map(\\.login)) { _, logins in
+            Task {
+                await pushNotificationCoordinator.workspaceChannelsChanged(
+                    grant: environment.authenticationGrantForPush(),
+                    channelLogins: logins
+                )
+            }
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: .ferventioDidRegisterAPNsDeviceToken
+            )
+        ) { notification in
+            guard let deviceToken = notification.object as? Data else {
+                return
+            }
+            Task {
+                await pushNotificationCoordinator.receiveDeviceToken(
+                    deviceToken,
+                    grant: environment.authenticationGrantForPush(),
+                    channelLogins: workspaceRegistry.workspaces.map(\\.login)
+                )
+            }
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: .ferventioDidFailAPNsRegistration
+            )
+        ) { notification in
+            if let error = notification.object as? NSError {
+                pushNotificationCoordinator.registrationFailed(error)
+            }
+        }
+'''
+              if anchor not in text:
+                  raise SystemExit("scene phase anchor not found")
+              write(root, text.replace(anchor, insertion + anchor, 1))
+
+          text = read(root)
+          restore_anchor = "            Task { await prepareWorkspaceRuntimes() }\n"
+          if "pushNotificationCoordinator.restoreIfNeeded" not in text:
+              replacement = '''            Task {
+                await prepareWorkspaceRuntimes()
+                await pushNotificationCoordinator.restoreIfNeeded(
+                    grant: environment.authenticationGrantForPush(),
+                    channelLogins: workspaceRegistry.workspaces.map(\\.login)
+                )
+            }
+'''
+              if restore_anchor not in text:
+                  raise SystemExit("workspace restore anchor not found")
+              write(root, text.replace(restore_anchor, replacement, 1))
+
+          settings = "Ferventio/Features/Settings/ChatHistorySettingsView.swift"
+          insert_after(
+              settings,
+              "    let applyWorkspaceImport: (SettingsBackupImportPlan) async -> Void\n",
+              "    let pushNotificationCoordinator: PushNotificationCoordinator\n    let authenticationGrant: AuthenticationGrant?\n    let pushChannelLogins: [String]\n",
+              "let pushNotificationCoordinator: PushNotificationCoordinator",
+          )
+          insert_after(
+              settings,
+              "        workspaceSnapshot: ChatWorkspaceRegistrySnapshot,\n",
+              "        pushNotificationCoordinator: PushNotificationCoordinator,\n        authenticationGrant: AuthenticationGrant?,\n        pushChannelLogins: [String],\n",
+              "pushNotificationCoordinator: PushNotificationCoordinator,",
+          )
+          insert_after(
+              settings,
+              "        self.applyWorkspaceImport = applyWorkspaceImport\n",
+              "        self.pushNotificationCoordinator = pushNotificationCoordinator\n        self.authenticationGrant = authenticationGrant\n        self.pushChannelLogins = pushChannelLogins\n",
+              "self.pushNotificationCoordinator = pushNotificationCoordinator",
+          )
+
+          text = read(settings)
+          if "PushNotificationSettingsView(" not in text:
+              anchor = "                Section {\n                    Button {\n                        showsBackupImporter = true\n"
+              insertion = '''                Section {
+                    NavigationLink {
+                        PushNotificationSettingsView(
+                            coordinator: pushNotificationCoordinator,
+                            grant: authenticationGrant,
+                            channelLogins: pushChannelLogins
+                        )
+                    } label: {
+                        Label(
+                            pushLocalized("open"),
+                            systemImage: "bell.badge"
+                        )
+                    }
+                } footer: {
+                    Text(pushLocalized("settings.footer"))
+                }
+
+'''
+              if anchor not in text:
+                  raise SystemExit("backup section anchor not found")
+              write(settings, text.replace(anchor, insertion + anchor, 1))
+
+          insert_before(
+              settings,
+              "    private func filtersLocalized(_ key: String.LocalizationValue) -> String {\n",
+              "    private func pushLocalized(_ key: String.LocalizationValue) -> String {\n        String(localized: key, table: \"PushNotifications\")\n    }\n\n",
+              "private func pushLocalized(",
+          )
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Ferventio/App/AppEnvironment.swift \
+            Ferventio/Features/Root/RootView.swift \
+            Ferventio/Features/Settings/ChatHistorySettingsView.swift
+          git rm .github/workflows/apply-ios-apns-integration.yml
+          git rm .github/workflows/apply-ios-apns-integration-v2.yml
+          git commit -m "feat: integrate iOS push notifications"
+          git push origin HEAD:feat/ios-apns
