@@ -1,4 +1,5 @@
 import Foundation
+import FerventioDomain
 import Testing
 @testable import Ferventio
 
@@ -86,6 +87,41 @@ struct PushNotificationRouteTests {
         )
 
         #expect(reconstructed == original)
+    }
+
+    @Test
+    func routeSessionPolicyKeepsColdLaunchRoutesButRejectsSignedOutRoutes() {
+        #expect(PushNotificationRouteSessionPolicy.acceptsOpenedRoute(in: .launching))
+        #expect(PushNotificationRouteSessionPolicy.acceptsOpenedRoute(in: .signedIn))
+        #expect(!PushNotificationRouteSessionPolicy.acceptsOpenedRoute(in: .signedOut))
+    }
+
+    @Test
+    func routeSessionPolicyClearsOnlyOnAuthenticatedSignOutTransition() {
+        #expect(
+            PushNotificationRouteSessionPolicy.shouldClearPendingRoute(
+                previousUserID: "old-user",
+                currentUserID: nil
+            )
+        )
+        #expect(
+            !PushNotificationRouteSessionPolicy.shouldClearPendingRoute(
+                previousUserID: nil,
+                currentUserID: nil
+            )
+        )
+        #expect(
+            !PushNotificationRouteSessionPolicy.shouldClearPendingRoute(
+                previousUserID: nil,
+                currentUserID: "new-user"
+            )
+        )
+        #expect(
+            !PushNotificationRouteSessionPolicy.shouldClearPendingRoute(
+                previousUserID: "old-user",
+                currentUserID: "new-user"
+            )
+        )
     }
 
     @Test
