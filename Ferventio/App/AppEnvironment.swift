@@ -597,7 +597,11 @@ final class AppEnvironment {
     }
 
     private func loadCurrentUser(for grant: AuthenticationGrant) async {
-        currentUser = try? await twitchBootstrap.loadCurrentUser(for: grant)
+        let user = try? await twitchBootstrap.loadCurrentUser(for: grant)
+        guard authenticationGrant == grant, state == .signedIn else {
+            return
+        }
+        currentUser = user
     }
 
     private func refreshInteractiveOverlays(
