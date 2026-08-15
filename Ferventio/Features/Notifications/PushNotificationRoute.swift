@@ -44,3 +44,23 @@ struct PushNotificationRoute: Equatable, Sendable {
         return trimmed.isEmpty ? nil : trimmed
     }
 }
+
+final class PushNotificationRouteBuffer: @unchecked Sendable {
+    static let shared = PushNotificationRouteBuffer()
+
+    private let lock = NSLock()
+    private var pendingRoute: PushNotificationRoute?
+
+    func store(_ route: PushNotificationRoute) {
+        lock.withLock {
+            pendingRoute = route
+        }
+    }
+
+    func takeLatest() -> PushNotificationRoute? {
+        lock.withLock {
+            defer { pendingRoute = nil }
+            return pendingRoute
+        }
+    }
+}
