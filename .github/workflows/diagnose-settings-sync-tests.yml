@@ -32,7 +32,15 @@ jobs:
           import os
           from pathlib import Path
 
-          text = Path(os.environ["LOG"]).read_text(encoding="utf-8", errors="replace")[-12000:]
+          lines = Path(os.environ["LOG"]).read_text(encoding="utf-8", errors="replace").splitlines()
+          needles = (
+              "error:", "failed", "failure", "issue recorded", "backendsettingssync",
+              "expectation failed", "✘", "×", "fatal error"
+          )
+          matches = [line for line in lines if any(needle in line.lower() for needle in needles)]
+          if not matches:
+              matches = lines[-120:]
+          text = "\n".join(matches[-160:])[-12000:]
           escaped = text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
           print(f"::error title=Settings sync core test failure::{escaped}")
           PY
