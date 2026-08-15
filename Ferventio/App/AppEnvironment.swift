@@ -309,6 +309,10 @@ final class AppEnvironment {
         try await timeoutUserFromCard(author, channel: runtime.chatStore.channel)
     }
 
+    func authenticationGrantForPush() -> AuthenticationGrant? {
+        authenticationGrant
+    }
+
     func chatHistoryPreferences() -> ChatHistoryPreferences {
         chatHistoryPreferencesStore.load()
     }
