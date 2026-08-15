@@ -10,6 +10,7 @@ struct PushNotificationCoordinatorTests {
     func signedOutRemovesRegistrationThatCompletesAfterLogout() async {
         let fixture = makeFixture()
         let grant = makeGrant(userID: "old-user", token: "old-session")
+        await fixture.activate(grant: grant, channelLogins: ["old-channel"])
 
         let registrationTask = Task { @MainActor in
             await fixture.coordinator.receiveDeviceToken(
@@ -37,6 +38,7 @@ struct PushNotificationCoordinatorTests {
         let fixture = makeFixture()
         let oldGrant = makeGrant(userID: "old-user", token: "old-session")
         let newGrant = makeGrant(userID: "new-user", token: "new-session")
+        await fixture.activate(grant: oldGrant, channelLogins: ["old-channel"])
 
         let oldRegistrationTask = Task { @MainActor in
             await fixture.coordinator.receiveDeviceToken(
@@ -48,6 +50,7 @@ struct PushNotificationCoordinatorTests {
         await fixture.registrationService.waitUntilFirstRegisterStarts()
         await fixture.coordinator.signedOut()
 
+        await fixture.activate(grant: newGrant, channelLogins: ["new-channel"])
         await fixture.coordinator.receiveDeviceToken(
             Data([0x02]),
             grant: newGrant,
@@ -74,6 +77,7 @@ struct PushNotificationCoordinatorTests {
         let fixture = makeFixture(blockFirstUnregister: true)
         let oldGrant = makeGrant(userID: "old-user", token: "old-session")
         let newGrant = makeGrant(userID: "new-user", token: "new-session")
+        await fixture.activate(grant: oldGrant, channelLogins: ["old-channel"])
 
         let oldRegistrationTask = Task { @MainActor in
             await fixture.coordinator.receiveDeviceToken(
@@ -105,6 +109,7 @@ struct PushNotificationCoordinatorTests {
         await signOutTask.value
 
         #expect(!fixture.coordinator.isTransportRegistered)
+        await fixture.activate(grant: newGrant, channelLogins: ["new-channel"])
         await fixture.coordinator.receiveDeviceToken(
             Data([0x03]),
             grant: newGrant,
@@ -120,9 +125,72 @@ struct PushNotificationCoordinatorTests {
     }
 
     @Test
+    func lateDeviceTokenAfterSignOutIsIgnoredUntilSessionRestores() async {
+        let fixture = makeFixture()
+        let oldGrant = makeGrant(userID: "old-user", token: "old-session")
+        let newGrant = makeGrant(userID: "new-user", token: "new-session")
+        await fixture.activate(grant: oldGrant, channelLogins: ["old-channel"])
+
+        let oldRegistrationTask = Task { @MainActor in
+            await fixture.coordinator.receiveDeviceToken(
+                Data([0x01]),
+                grant: oldGrant,
+                channelLogins: ["old-channel"]
+            )
+        }
+        await fixture.registrationService.waitUntilFirstRegisterStarts()
+        await fixture.registrationService.completeFirstRegister()
+        await oldRegistrationTask.value
+        #expect(fixture.coordinator.isTransportRegistered)
+
+        await fixture.coordinator.signedOut()
+        #expect(!fixture.coordinator.isTransportRegistered)
+
+        await fixture.coordinator.receiveDeviceToken(
+            Data([0x02]),
+            grant: oldGrant,
+            channelLogins: ["old-channel"]
+        )
+        #expect(await fixture.registrationService.registrationCalls().count == 1)
+
+        await fixture.activate(grant: newGrant, channelLogins: ["new-channel"])
+        await fixture.coordinator.receiveDeviceToken(
+            Data([0x03]),
+            grant: newGrant,
+            channelLogins: ["new-channel"]
+        )
+
+        let registrations = await fixture.registrationService.registrationCalls()
+        #expect(registrations.count == 2)
+        #expect(registrations[1].userID == "new-user")
+        #expect(registrations[1].deviceToken == Data([0x03]))
+        #expect(fixture.coordinator.isTransportRegistered)
+        fixture.cleanup()
+    }
+
+    @Test
+    func lateRegistrationFailureAfterSignOutIsIgnored() async {
+        let fixture = makeFixture()
+        let grant = makeGrant(userID: "user", token: "session")
+        await fixture.activate(grant: grant, channelLogins: ["channel"])
+
+        fixture.coordinator.registrationFailed(TestPushError.failed)
+        #expect(fixture.coordinator.errorMessage != nil)
+
+        await fixture.coordinator.signedOut()
+        #expect(fixture.coordinator.errorMessage == nil)
+
+        fixture.coordinator.registrationFailed(TestPushError.failed)
+        #expect(fixture.coordinator.errorMessage == nil)
+        #expect(!fixture.coordinator.isTransportRegistered)
+        fixture.cleanup()
+    }
+
+    @Test
     func newerDeviceTokenIsReplayedAfterInFlightRegistration() async {
         let fixture = makeFixture()
         let grant = makeGrant(userID: "user", token: "session")
+        await fixture.activate(grant: grant, channelLogins: ["channel"])
 
         let firstRegistrationTask = Task { @MainActor in
             await fixture.coordinator.receiveDeviceToken(
@@ -210,9 +278,20 @@ private struct PushCoordinatorFixture {
     let defaults: UserDefaults
     let suiteName: String
 
+    func activate(grant: AuthenticationGrant, channelLogins: [String]) async {
+        await coordinator.restoreIfNeeded(
+            grant: grant,
+            channelLogins: channelLogins
+        )
+    }
+
     func cleanup() {
         defaults.removePersistentDomain(forName: suiteName)
     }
+}
+
+private enum TestPushError: Swift.Error {
+    case failed
 }
 
 private struct RecordedPushRegistration: Equatable, Sendable {
