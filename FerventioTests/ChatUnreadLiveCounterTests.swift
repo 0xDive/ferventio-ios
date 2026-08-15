@@ -70,24 +70,36 @@ struct ChatUnreadLiveCounterTests {
     }
 
     @Test
-    func missingPreviousTailAddsConservativeSingleUnreadAndCapsTotal() {
+    func missingPreviousTailDoesNotManufactureUnreadAndStillClampsTotal() {
         let messages = [makeMessage(id: "new-tail")]
 
         let ordinary = ChatUnreadLiveCounter.updatedCount(
             currentCount: 3,
-            previousLastMessageID: "trimmed-tail",
+            previousLastMessageID: "removed-tail",
             visibleMessages: messages,
             isFollowingLive: false
         )
         let capped = ChatUnreadLiveCounter.updatedCount(
-            currentCount: ChatUnreadLiveCounter.maximumCount,
-            previousLastMessageID: "trimmed-tail",
+            currentCount: ChatUnreadLiveCounter.maximumCount + 50,
+            previousLastMessageID: "removed-tail",
             visibleMessages: messages,
             isFollowingLive: false
         )
 
-        #expect(ordinary == 4)
+        #expect(ordinary == 3)
         #expect(capped == ChatUnreadLiveCounter.maximumCount)
+    }
+
+    @Test
+    func missingPreviousTailClampsNegativeCurrentCountToZero() {
+        let count = ChatUnreadLiveCounter.updatedCount(
+            currentCount: -5,
+            previousLastMessageID: "removed-tail",
+            visibleMessages: [makeMessage(id: "current-tail")],
+            isFollowingLive: false
+        )
+
+        #expect(count == 0)
     }
 
     private func makeMessage(id: String) -> ChatMessage {

@@ -12,25 +12,23 @@ struct ChatUnreadLiveCounter {
         if isFollowingLive {
             return 0
         }
+
+        let clampedCurrentCount = min(Self.maximumCount, max(0, currentCount))
         guard let previousLastMessageID,
               let currentLastMessageID = visibleMessages.last?.id,
               previousLastMessageID != currentLastMessageID else {
-            return min(Self.maximumCount, max(0, currentCount))
+            return clampedCurrentCount
         }
 
-        let appendedCount: Int
-        if let previousIndex = visibleMessages.lastIndex(where: { $0.id == previousLastMessageID }) {
-            let nextIndex = visibleMessages.index(after: previousIndex)
-            appendedCount = visibleMessages.distance(from: nextIndex, to: visibleMessages.endIndex)
-        } else {
-            // If the previously visible tail was trimmed from the bounded live buffer,
-            // still surface that something new arrived without guessing the full delta.
-            appendedCount = 1
+        guard let previousIndex = visibleMessages.lastIndex(where: { $0.id == previousLastMessageID }) else {
+            // A missing previous tail is ambiguous: it may have been deleted, hidden by
+            // presentation rules, or replaced during a refresh. Do not manufacture an
+            // unread message from a view-only change; later appends will be counted normally.
+            return clampedCurrentCount
         }
 
-        return min(
-            Self.maximumCount,
-            max(0, currentCount) + max(1, appendedCount)
-        )
+        let nextIndex = visibleMessages.index(after: previousIndex)
+        let appendedCount = visibleMessages.distance(from: nextIndex, to: visibleMessages.endIndex)
+        return min(Self.maximumCount, clampedCurrentCount + appendedCount)
     }
 }
