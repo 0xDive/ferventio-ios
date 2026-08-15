@@ -67,6 +67,102 @@
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "Синхронизирует переносимую резервную копию Ferventio v2 через авторизованную backend-сессию. OAuth-данные и секреты Keychain никогда не загружаются. Правила отображения, доступные только на iOS, остаются локальными." } }
       }
     },
+    "history.app_version" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "App version %@" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Версия приложения %@" } }
+      }
+    },
+    "history.cancel" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Cancel" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Отмена" } }
+      }
+    },
+    "history.current" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Current" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Текущая" } }
+      }
+    },
+    "history.empty.message" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Save settings to the cloud to create the first revision." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Сохраните настройки в облако, чтобы создать первую ревизию." } }
+      }
+    },
+    "history.empty.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No cloud revisions" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Нет облачных ревизий" } }
+      }
+    },
+    "history.error.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Cloud history error" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Ошибка истории облака" } }
+      }
+    },
+    "history.ok" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "OK" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "ОК" } }
+      }
+    },
+    "history.open" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Revision history" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "История ревизий" } }
+      }
+    },
+    "history.restore" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Restore" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Восстановить" } }
+      }
+    },
+    "history.restore.message" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The selected snapshot becomes a new current cloud revision. Its settings are staged locally; tap Done on the Settings screen to apply them." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Выбранная копия станет новой текущей облачной ревизией. Её настройки будут подготовлены локально; нажмите «Готово» на экране настроек, чтобы применить их." } }
+      }
+    },
+    "history.restore.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Restore revision %lld?" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Восстановить ревизию %lld?" } }
+      }
+    },
+    "history.restore.title.generic" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Restore cloud revision?" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Восстановить облачную ревизию?" } }
+      }
+    },
+    "history.restored" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Restored as cloud revision %lld. Tap Done to apply it locally." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Восстановлено как облачная ревизия %lld. Нажмите «Готово», чтобы применить её локально." } }
+      }
+    },
+    "history.retry" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Try again" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Повторить" } }
+      }
+    },
+    "history.revision" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Revision %lld" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Ревизия %lld" } }
+      }
+    },
+    "history.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Cloud history" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "История облака" } }
+      }
+    },
     "section" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Cloud backup" } },
