@@ -2,6 +2,7 @@ import FerventioDomain
 import SwiftUI
 
 struct RootView: View {
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.scenePhase) private var scenePhase
 
     @Bindable var environment: AppEnvironment
@@ -167,15 +168,11 @@ struct RootView: View {
     }
 
     private var signedInView: some View {
-        VStack(spacing: 0) {
-            accountHeader
-            Divider()
-            workspaceBar
-            Divider()
-            if let runtime = activeWorkspaceRuntime {
-                workspaceChat(runtime)
+        Group {
+            if horizontalSizeClass == .regular {
+                regularWorkspaceLayout
             } else {
-                emptyWorkspaceView
+                compactWorkspaceLayout
             }
         }
         .toolbar {
@@ -208,6 +205,34 @@ struct RootView: View {
         }
     }
 
+    private var compactWorkspaceLayout: some View {
+        VStack(spacing: 0) {
+            accountHeader
+            Divider()
+            workspaceBar
+            Divider()
+            workspaceContent
+        }
+    }
+
+    private var regularWorkspaceLayout: some View {
+        HStack(spacing: 0) {
+            workspaceSidebar
+                .frame(minWidth: 220, idealWidth: 260, maxWidth: 300)
+            Divider()
+            workspaceContent
+        }
+    }
+
+    @ViewBuilder
+    private var workspaceContent: some View {
+        if let runtime = activeWorkspaceRuntime {
+            workspaceChat(runtime)
+        } else {
+            emptyWorkspaceView
+        }
+    }
+
     private var workspaceBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
@@ -227,6 +252,90 @@ struct RootView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
+        }
+    }
+
+    private var workspaceSidebar: some View {
+        VStack(spacing: 0) {
+            accountHeader
+            Divider()
+
+            ScrollView {
+                LazyVStack(spacing: 4) {
+                    ForEach(workspaceRegistry.workspaces) { workspace in
+                        workspaceSidebarRow(workspace)
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 12)
+            }
+
+            Divider()
+            Button {
+                presentNewWorkspace()
+            } label: {
+                Label("chat.workspace.add", systemImage: "plus")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .keyboardShortcut("n", modifiers: .command)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+        }
+        .background(Color(uiColor: .secondarySystemBackground))
+    }
+
+    private func workspaceSidebarRow(_ workspace: ChatWorkspace) -> some View {
+        let isActive = workspaceRegistry.activeWorkspaceID == workspace.id
+        return HStack(spacing: 8) {
+            Button {
+                selectWorkspace(workspace)
+            } label: {
+                HStack(spacing: 9) {
+                    Image(systemName: isActive ? "number.circle.fill" : "number.circle")
+                        .foregroundStyle(isActive ? Color.accentColor : Color.secondary)
+                        .accessibilityHidden(true)
+                    Text(workspace.login)
+                        .font(.body.weight(isActive ? .semibold : .regular))
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                    if isActive {
+                        Image(systemName: "checkmark")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(Color.accentColor)
+                            .accessibilityHidden(true)
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 9)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text("#\(workspace.login)"))
+            .accessibilityAddTraits(isActive ? .isSelected : [])
+
+            Button(role: .destructive) {
+                closeWorkspace(workspace)
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.caption.weight(.semibold))
+                    .frame(width: 28, height: 28)
+                    .accessibilityLabel(Text("chat.workspace.close"))
+            }
+            .buttonStyle(.borderless)
+        }
+        .padding(.horizontal, 4)
+        .background(
+            isActive ? Color.accentColor.opacity(0.12) : Color.clear,
+            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+        )
+        .contextMenu {
+            Button(role: .destructive) {
+                closeWorkspace(workspace)
+            } label: {
+                Label("chat.workspace.close", systemImage: "xmark")
+            }
         }
     }
 
