@@ -189,7 +189,12 @@ final class ChatStore {
     }
 
     func failChannelResolution() {
-        connectionState = .failed
+        switch connectionState {
+        case .disconnected, .failed:
+            connectionState = .failed
+        case .connecting, .connected, .reconnecting, .suspended:
+            break
+        }
         showsConnectionError = true
     }
 
@@ -428,6 +433,7 @@ final class ChatStore {
             return
         }
         recentMessagesTask?.cancel()
+        recentMessagesTask = nil
         recentMessagesTask = Task { [weak self] in
             guard let self else { return }
             do {
