@@ -226,6 +226,44 @@ struct ChatPresentationRuleEngineTests {
         #expect(second.highlightedMessageIDs.isEmpty)
     }
 
+    @Test
+    func cachedPlansRemainCorrectWhileDifferentRulesProjectConcurrently() async {
+        let spam = makeMessage(id: "spam", text: "spam")
+        let safe = makeMessage(id: "safe", text: "safe")
+        let hideSpam = [
+            ChatPresentationRule(
+                action: .hide,
+                target: .message,
+                query: "spam"
+            ),
+        ]
+        let hideSafe = [
+            ChatPresentationRule(
+                action: .hide,
+                target: .message,
+                query: "safe"
+            ),
+        ]
+
+        await withTaskGroup(of: Bool.self) { group in
+            for index in 0..<100 {
+                let rules = index.isMultiple(of: 2) ? hideSpam : hideSafe
+                let expectedID = index.isMultiple(of: 2) ? safe.id : spam.id
+                group.addTask {
+                    let projection = ChatPresentationRuleEngine.project(
+                        messages: [spam, safe],
+                        rules: rules
+                    )
+                    return projection.visibleMessages.map(\.id) == [expectedID]
+                }
+            }
+
+            for await isCorrect in group {
+                #expect(isCorrect)
+            }
+        }
+    }
+
     private func makeMessage(
         id: String,
         authorLogin: String = "viewer",
