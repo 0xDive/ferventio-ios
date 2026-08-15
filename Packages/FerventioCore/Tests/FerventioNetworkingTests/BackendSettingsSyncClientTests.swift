@@ -3,6 +3,7 @@ import FerventioDomain
 import Testing
 @testable import FerventioNetworking
 
+@Suite(.serialized)
 struct BackendSettingsSyncClientTests {
     @Test
     func currentDecodesPortableSnapshotAndAuthenticatesRequest() async throws {
