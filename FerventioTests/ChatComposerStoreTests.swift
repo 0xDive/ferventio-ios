@@ -109,6 +109,23 @@ struct ChatComposerStoreTests {
     }
 
     @Test
+    func activationReturnsDraftEditedWhileHistoryLoads() async {
+        let persistence = BlockingActivationHistoryPersistence(draft: "Stored draft")
+        let store = ChatComposerStore(persistence: persistence)
+
+        let activation = Task { @MainActor in
+            await store.activate(channelID: "channel")
+        }
+        await persistence.waitUntilHistoryLoadStarts()
+
+        store.updateDraft(channelID: "channel", text: "Fresh input")
+        await persistence.releaseHistoryLoad()
+
+        #expect(await activation.value == "Fresh input")
+        #expect(store.activeChannelID == "channel")
+    }
+
+    @Test
     func flushPersistsPendingDraftWithoutWaitingForDebounce() async {
         let persistence = StubChatComposerPersistence()
         let store = ChatComposerStore(persistence: persistence)
@@ -278,5 +295,53 @@ private actor BlockingSentHistoryPersistence: ChatComposerPersisting {
     func releaseRecordedHistoryLoad() {
         recordedHistoryLoadContinuation?.resume()
         recordedHistoryLoadContinuation = nil
+    }
+}
+
+private actor BlockingActivationHistoryPersistence: ChatComposerPersisting {
+    private let storedDraft: String
+    private var historyLoadStarted = false
+    private var historyLoadWaiters: [CheckedContinuation<Void, Never>] = []
+    private var historyLoadContinuation: CheckedContinuation<Void, Never>?
+
+    init(draft: String) {
+        storedDraft = draft
+    }
+
+    func draft(channelID: String) -> String? {
+        storedDraft
+    }
+
+    func saveDraft(channelID: String, text: String, updatedAtMilliseconds: Int64) {}
+
+    func deleteDraft(channelID: String) {}
+
+    func sentMessages(channelID: String, limit: Int) async -> [SentChatMessageRecord] {
+        await withCheckedContinuation { continuation in
+            historyLoadContinuation = continuation
+            historyLoadStarted = true
+            let waiters = historyLoadWaiters
+            historyLoadWaiters.removeAll()
+            for waiter in waiters {
+                waiter.resume()
+            }
+        }
+        return []
+    }
+
+    func recordSentMessage(_ entry: SentChatMessageRecord, keepingLatest limit: Int) {}
+
+    func waitUntilHistoryLoadStarts() async {
+        guard !historyLoadStarted else {
+            return
+        }
+        await withCheckedContinuation { continuation in
+            historyLoadWaiters.append(continuation)
+        }
+    }
+
+    func releaseHistoryLoad() {
+        historyLoadContinuation?.resume()
+        historyLoadContinuation = nil
     }
 }
