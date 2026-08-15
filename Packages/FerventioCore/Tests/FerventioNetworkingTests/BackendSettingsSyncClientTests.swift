@@ -154,9 +154,38 @@ private final class URLProtocolState: @unchecked Sendable {
     }
 
     func handle(_ request: URLRequest) -> (Int, Data)? {
-        lock.withLock {
-            storedLastRequest = request
-            return storedHandler?(request)
+        var capturedRequest = request
+        if capturedRequest.httpBody == nil,
+           let stream = capturedRequest.httpBodyStream,
+           let body = materialize(stream) {
+            capturedRequest.httpBody = body
+            capturedRequest.httpBodyStream = nil
+        }
+        let handler = lock.withLock {
+            storedLastRequest = capturedRequest
+            return storedHandler
+        }
+        return handler?(capturedRequest)
+    }
+
+    private func materialize(_ stream: InputStream) -> Data? {
+        stream.open()
+        defer { stream.close() }
+
+        let bufferSize = 4_096
+        let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
+        defer { buffer.deallocate() }
+
+        var data = Data()
+        while true {
+            let count = stream.read(buffer, maxLength: bufferSize)
+            if count < 0 {
+                return nil
+            }
+            if count == 0 {
+                return data
+            }
+            data.append(buffer, count: count)
         }
     }
 }
