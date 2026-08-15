@@ -112,9 +112,9 @@ struct SettingsBackupBridgeTests {
     }
 
     @Test
-    func importPlanNormalizesChannelsBeforeCapacityAndSelection() throws {
-        var content = try sampleExport().document.content
-        content.channels = SettingsBackupChannels(
+    func importPlanDefensivelyNormalizesChannelsBeforeCapacityAndSelection() throws {
+        var document = try sampleExport().document
+        document.content.channels = SettingsBackupChannels(
             logins: [
                 "  Alpha  ",
                 "ALPHA",
@@ -124,11 +124,6 @@ struct SettingsBackupBridgeTests {
                 "Delta",
             ],
             selectedLogin: "  BETA  "
-        )
-        let document = try SettingsBackupCodec.makeDocument(
-            content: content,
-            appVersion: "android-test",
-            createdAt: "2026-08-14T17:31:30Z"
         )
 
         let plan = SettingsBackupBridge.importPlan(

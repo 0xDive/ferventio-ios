@@ -44,7 +44,7 @@ struct InteractiveChatMutationStoreTests {
         )
         #expect(!result)
         #expect(store.status?.failureKind == .permission)
-        #expect(store.status?.recovery == .none)
+        #expect(store.status?.recovery == InteractiveMutationRecovery.none)
     }
 
     private func ownChannel() -> ChatChannel {
