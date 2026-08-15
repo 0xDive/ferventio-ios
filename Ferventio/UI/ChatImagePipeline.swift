@@ -36,11 +36,12 @@ private enum ChatImageLoader {
                 forHTTPHeaderField: "Accept"
             )
             request.timeoutInterval = 20
-            let (data, response) = try await session.data(for: request)
-            guard !Task.isCancelled,
-                  let http = response as? HTTPURLResponse,
-                  (200..<300).contains(http.statusCode),
-                  data.count <= maximumResponseBytes else {
+            guard let (data, http) = try await boundedData(
+                for: request,
+                session: session
+            ),
+            (200..<300).contains(http.statusCode),
+            !Task.isCancelled else {
                 return nil
             }
             return decode(
@@ -51,6 +52,35 @@ private enum ChatImageLoader {
         } catch {
             return nil
         }
+    }
+
+    private static func boundedData(
+        for request: URLRequest,
+        session: URLSession
+    ) async throws -> (Data, HTTPURLResponse)? {
+        let (bytes, response) = try await session.bytes(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            return nil
+        }
+
+        let expectedLength = http.expectedContentLength
+        guard expectedLength <= 0 || expectedLength <= Int64(maximumResponseBytes) else {
+            return nil
+        }
+
+        var data = Data()
+        if expectedLength > 0 {
+            data.reserveCapacity(Int(expectedLength))
+        }
+
+        for try await byte in bytes {
+            guard !Task.isCancelled,
+                  data.count < maximumResponseBytes else {
+                return nil
+            }
+            data.append(byte)
+        }
+        return (data, http)
     }
 
     private static func decode(

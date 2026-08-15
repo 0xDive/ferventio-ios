@@ -70,8 +70,30 @@ struct ChatImagePipelineTests {
         #expect(StubChatImageURLProtocol.requestCount == 1)
     }
 
-    private func makePipeline(data: Data) -> ChatImagePipeline {
-        StubChatImageURLProtocol.reset(data: data)
+    @Test
+    func oversizedDeclaredResponseIsRejectedBeforeDecode() async {
+        let pipeline = makePipeline(
+            data: Self.animatedGIF,
+            contentLength: 8 * 1024 * 1024 + 1
+        )
+
+        let asset = await pipeline.image(
+            for: URL(string: "https://example.com/oversized.gif")!,
+            allowsAnimation: false
+        )
+
+        #expect(asset == nil)
+        #expect(StubChatImageURLProtocol.requestCount == 1)
+    }
+
+    private func makePipeline(
+        data: Data,
+        contentLength: Int? = nil
+    ) -> ChatImagePipeline {
+        StubChatImageURLProtocol.reset(
+            data: data,
+            contentLength: contentLength
+        )
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [StubChatImageURLProtocol.self]
         return ChatImagePipeline(session: URLSession(configuration: configuration))
@@ -81,11 +103,13 @@ struct ChatImagePipelineTests {
 private final class StubChatImageURLProtocol: URLProtocol {
     private static let lock = NSLock()
     nonisolated(unsafe) private static var responseData = Data()
+    nonisolated(unsafe) private static var declaredContentLength: Int?
     nonisolated(unsafe) private static var requests = 0
 
-    static func reset(data: Data) {
+    static func reset(data: Data, contentLength: Int? = nil) {
         lock.lock()
         responseData = data
+        declaredContentLength = contentLength
         requests = 0
         lock.unlock()
     }
@@ -108,15 +132,21 @@ private final class StubChatImageURLProtocol: URLProtocol {
     override func startLoading() {
         Self.lock.lock()
         let data = Self.responseData
+        let contentLength = Self.declaredContentLength
         Self.requests += 1
         Self.lock.unlock()
+
+        var headers = ["Content-Type": "image/gif"]
+        if let contentLength {
+            headers["Content-Length"] = String(contentLength)
+        }
 
         guard let url = request.url,
               let response = HTTPURLResponse(
                   url: url,
                   statusCode: 200,
                   httpVersion: "HTTP/1.1",
-                  headerFields: ["Content-Type": "image/gif"]
+                  headerFields: headers
               ) else {
             client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
             return
