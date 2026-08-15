@@ -168,8 +168,8 @@ final class AuthService: Authenticating {
     }
 
     func signOut() async throws {
-        if let stored = try authenticationStore.load() {
-            let device = try identityStore.loadOrCreate()
+        if let stored = try? authenticationStore.load(),
+           let device = try? identityStore.loadOrCreate() {
             try? await backendClient.logout(
                 device: device,
                 credential: stored.backendCredential

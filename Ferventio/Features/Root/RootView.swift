@@ -263,9 +263,12 @@ struct RootView: View {
 
                 Button("auth.sign_out", role: .destructive) {
                     Task {
+                        await environment.signOut()
+                        guard environment.state == .signedOut else {
+                            return
+                        }
                         await workspaceRuntimePool.removeAll()
                         await pushNotificationCoordinator.signedOut()
-                        await environment.signOut()
                     }
                 }
                 .disabled(environment.isSigningOut)

@@ -63,6 +63,38 @@ struct AppEnvironmentTests {
     }
 
     @Test
+    func failedSignOutPreservesActiveSessionAndChatState() async {
+        let grant = makeGrant()
+        let user = TwitchUser(
+            id: grant.accessLease.session.userID,
+            login: grant.accessLease.session.login,
+            displayName: "Test User",
+            profileImageURL: nil,
+            createdAt: nil,
+            broadcasterType: nil,
+            description: nil
+        )
+        let service = StubAuthService(
+            restoreResult: grant,
+            signOutError: StubAuthFailure.signOutFailed
+        )
+        let environment = AppEnvironment(
+            authService: service,
+            twitchBootstrap: StubTwitchBootstrap(user: user)
+        )
+        await environment.start()
+        environment.chatStore.composerText = "keep this draft"
+
+        await environment.signOut()
+
+        #expect(environment.state == .signedIn)
+        #expect(environment.session == grant.accessLease.session)
+        #expect(environment.currentUser == user)
+        #expect(environment.chatStore.composerText == "keep this draft")
+        #expect(environment.showsAuthenticationError)
+    }
+
+    @Test
     func signOutIgnoresProfileBootstrapThatCompletesForOldSession() async {
         let grant = makeGrant()
         let staleUser = TwitchUser(
@@ -126,10 +158,12 @@ struct AppEnvironmentTests {
 private final class StubAuthService: Authenticating {
     let restoreResult: AuthenticationGrant?
     let signInResult: AuthenticationGrant
+    let signOutError: Swift.Error?
 
     init(
         restoreResult: AuthenticationGrant?,
-        signInResult: AuthenticationGrant? = nil
+        signInResult: AuthenticationGrant? = nil,
+        signOutError: Swift.Error? = nil
     ) {
         self.restoreResult = restoreResult
         self.signInResult = signInResult ?? AuthenticationGrant(
@@ -153,6 +187,7 @@ private final class StubAuthService: Authenticating {
                 )
             )
         )
+        self.signOutError = signOutError
     }
 
     func restoreAuthentication() async throws -> AuthenticationGrant? {
@@ -163,7 +198,11 @@ private final class StubAuthService: Authenticating {
         signInResult
     }
 
-    func signOut() async throws {}
+    func signOut() async throws {
+        if let signOutError {
+            throw signOutError
+        }
+    }
 }
 
 private struct StubTwitchBootstrap: TwitchBootstrapping, Sendable {
@@ -233,4 +272,8 @@ private actor BlockingTwitchBootstrap: TwitchBootstrapping {
 
 private enum BootstrapFailure: Swift.Error, Sendable {
     case failed
+}
+
+private enum StubAuthFailure: Swift.Error, Sendable {
+    case signOutFailed
 }

@@ -171,20 +171,23 @@ final class ChatComposerStore {
     }
 
     private func flushDraft(channelID: String) async {
-        guard let text = pendingDrafts[channelID] else {
-            return
-        }
-        if text.isEmpty {
-            await persistence.deleteDraft(channelID: channelID)
-        } else {
-            let nowMilliseconds = Int64(
-                (Date().timeIntervalSince1970 * 1_000).rounded(.towardZero)
-            )
-            await persistence.saveDraft(
-                channelID: channelID,
-                text: text,
-                updatedAtMilliseconds: nowMilliseconds
-            )
+        while let text = pendingDrafts[channelID] {
+            if text.isEmpty {
+                await persistence.deleteDraft(channelID: channelID)
+            } else {
+                let nowMilliseconds = Int64(
+                    (Date().timeIntervalSince1970 * 1_000).rounded(.towardZero)
+                )
+                await persistence.saveDraft(
+                    channelID: channelID,
+                    text: text,
+                    updatedAtMilliseconds: nowMilliseconds
+                )
+            }
+
+            guard pendingDrafts[channelID] != text else {
+                return
+            }
         }
     }
 }

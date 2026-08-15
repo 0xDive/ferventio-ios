@@ -87,6 +87,32 @@ struct ChatComposerStoreTests {
     }
 
     @Test
+    func switchingChannelsPersistsEditMadeWhilePreviousDraftFlushes() async {
+        let persistence = BlockingDraftFlushPersistence(
+            drafts: [
+                "channel-a": "Draft A",
+                "channel-b": "Draft B",
+            ]
+        )
+        let store = ChatComposerStore(persistence: persistence)
+
+        _ = await store.activate(channelID: "channel-a")
+        store.updateDraft(channelID: "channel-a", text: "First edit")
+
+        let switchTask = Task { @MainActor in
+            await store.activate(channelID: "channel-b")
+        }
+        await persistence.waitUntilFirstSaveStarts()
+
+        store.updateDraft(channelID: "channel-a", text: "Newest A")
+        await persistence.releaseFirstSave()
+
+        #expect(await switchTask.value == "Draft B")
+        #expect(await persistence.draft(channelID: "channel-a") == "Newest A")
+        #expect(store.activeChannelID == "channel-b")
+    }
+
+    @Test
     func staleSentHistoryReloadCannotReplaceNewChannelHistory() async {
         let persistence = BlockingSentHistoryPersistence()
         let store = ChatComposerStore(persistence: persistence)

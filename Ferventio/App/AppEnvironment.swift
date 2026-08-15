@@ -150,16 +150,14 @@ final class AppEnvironment {
             return
         }
         isSigningOut = true
+        showsAuthenticationError = false
         defer { isSigningOut = false }
 
-        await chatStore.disconnect()
-        chatHistoryPager.reset(channelID: nil)
-        chatAssetStore.reset()
-        interactiveMutationStore.clear()
         do {
             try await authService.signOut()
             clearSession()
             state = .signedOut
+            await chatStore.disconnect()
         } catch {
             showsAuthenticationError = true
         }
