@@ -22,7 +22,11 @@ final class PushNotificationAuthorizationService: PushNotificationAuthorizing {
     }
 
     func authorizationStatus() async -> UNAuthorizationStatus {
-        await center.notificationSettings().authorizationStatus
+        await withCheckedContinuation { continuation in
+            center.getNotificationSettings { settings in
+                continuation.resume(returning: settings.authorizationStatus)
+            }
+        }
     }
 
     func registerForRemoteNotifications() {
