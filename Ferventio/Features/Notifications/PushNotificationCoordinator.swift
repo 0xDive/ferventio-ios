@@ -255,6 +255,7 @@ final class PushNotificationCoordinator {
             guard request.generation == registrationGeneration else {
                 continue
             }
+            errorMessage = nil
 
             do {
                 try await registrationService.register(
