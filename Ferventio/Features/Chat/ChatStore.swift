@@ -67,6 +67,7 @@ final class ChatStore {
     @ObservationIgnored private var receiveTask: Task<Void, Never>?
     @ObservationIgnored private var recentMessagesTask: Task<Void, Never>?
     @ObservationIgnored private var generation = 0
+    @ObservationIgnored private var sendGeneration = 0
     @ObservationIgnored private var activeLease: TwitchAccessLease?
     @ObservationIgnored private var localAuthor: ChatAuthor?
     @ObservationIgnored private var thirdPartyEmoteCatalog = ThirdPartyEmoteCatalog(emotes: [])
@@ -117,6 +118,8 @@ final class ChatStore {
         currentUser: TwitchUser?
     ) async {
         generation &+= 1
+        sendGeneration &+= 1
+        isSending = false
         let currentGeneration = generation
         receiveTask?.cancel()
         receiveTask = nil
@@ -245,6 +248,8 @@ final class ChatStore {
 
     func disconnect() async {
         generation &+= 1
+        sendGeneration &+= 1
+        isSending = false
         receiveTask?.cancel()
         receiveTask = nil
         recentMessagesTask?.cancel()
@@ -284,6 +289,7 @@ final class ChatStore {
             return
         }
 
+        let currentSendGeneration = sendGeneration
         let text = composerText
         let selectedReply = replyTarget
         let replyParentMessageID = selectedReply.flatMap { replyParentID(for: $0) }
@@ -310,7 +316,11 @@ final class ChatStore {
         showsSendError = false
         messages.append(localMessage)
         trimMessagesIfNeeded()
-        defer { isSending = false }
+        defer {
+            if sendGeneration == currentSendGeneration {
+                isSending = false
+            }
+        }
 
         do {
             let result = try await sender.sendMessage(
@@ -321,6 +331,9 @@ final class ChatStore {
                 message: text,
                 replyParentMessageID: replyParentMessageID
             )
+            guard sendGeneration == currentSendGeneration else {
+                return
+            }
             guard result.isSent, let serverMessageID = result.messageID else {
                 markOptimisticMessage(
                     nonce: nonce,
@@ -333,6 +346,9 @@ final class ChatStore {
             }
             reconcileOptimisticMessage(nonce: nonce, serverMessageID: serverMessageID)
         } catch {
+            guard sendGeneration == currentSendGeneration else {
+                return
+            }
             markOptimisticMessage(
                 nonce: nonce,
                 state: .failed,
