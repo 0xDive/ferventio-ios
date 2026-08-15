@@ -124,7 +124,14 @@ struct RootView: View {
                 )
             }
         }
-        .onChange(of: environment.session?.userID, initial: true) { _, userID in
+        .onChange(of: environment.session?.userID, initial: true) { previousUserID, userID in
+            if PushNotificationRouteSessionPolicy.shouldClearPendingRoute(
+                previousUserID: previousUserID,
+                currentUserID: userID
+            ) {
+                pendingPushRoute = nil
+                PushNotificationRouteBuffer.shared.clear()
+            }
             guard userID != nil else {
                 return
             }
@@ -175,9 +182,10 @@ struct RootView: View {
                 for: .ferventioDidOpenRemoteNotification
             )
         ) { notification in
-            guard let route = PushNotificationRoute(
-                userInfo: notification.userInfo ?? [:]
-            ) else {
+            guard PushNotificationRouteSessionPolicy.acceptsOpenedRoute(in: environment.state),
+                  let route = PushNotificationRoute(
+                      userInfo: notification.userInfo ?? [:]
+                  ) else {
                 return
             }
             pendingPushRoute = route
