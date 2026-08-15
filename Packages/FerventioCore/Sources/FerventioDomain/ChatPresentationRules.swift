@@ -66,6 +66,85 @@ public struct ChatPresentationRuleProjection: Equatable, Sendable {
     }
 }
 
+public struct ChatPresentationRulePlan {
+    fileprivate let compiledRules: [CompiledPresentationRule]
+    fileprivate let needsFoldedMessageText: Bool
+    fileprivate let needsFoldedAuthor: Bool
+
+    public init(rules: [ChatPresentationRule]) {
+        compiledRules = rules.compactMap(CompiledPresentationRule.init)
+        needsFoldedMessageText = compiledRules.contains { rule in
+            rule.target == .message && rule.matcher.requiresFoldedValue
+        }
+        needsFoldedAuthor = compiledRules.contains { rule in
+            rule.target == .author && rule.matcher.requiresFoldedValue
+        }
+    }
+
+    public func project(messages: [ChatMessage]) -> ChatPresentationRuleProjection {
+        guard !compiledRules.isEmpty else {
+            return ChatPresentationRuleProjection(
+                visibleMessages: messages,
+                highlightedMessageIDs: []
+            )
+        }
+
+        var visibleMessages: [ChatMessage] = []
+        visibleMessages.reserveCapacity(messages.count)
+        var highlightedMessageIDs: Set<String> = []
+
+        for message in messages {
+            let foldedMessageText = needsFoldedMessageText
+                ? ChatPresentationRuleEngine.folded(message.text)
+                : nil
+            let foldedAuthorLogin = needsFoldedAuthor
+                ? ChatPresentationRuleEngine.folded(message.author.login)
+                : nil
+            let foldedAuthorDisplayName = needsFoldedAuthor
+                ? ChatPresentationRuleEngine.folded(message.author.displayName)
+                : nil
+
+            var hidden = false
+            var highlighted = false
+
+            for rule in compiledRules {
+                guard rule.matches(
+                    message,
+                    foldedMessageText: foldedMessageText,
+                    foldedAuthorLogin: foldedAuthorLogin,
+                    foldedAuthorDisplayName: foldedAuthorDisplayName
+                ) else {
+                    continue
+                }
+
+                switch rule.action {
+                case .hide:
+                    hidden = true
+                case .highlight:
+                    highlighted = true
+                }
+
+                if hidden {
+                    break
+                }
+            }
+
+            guard !hidden else {
+                continue
+            }
+            visibleMessages.append(message)
+            if highlighted {
+                highlightedMessageIDs.insert(message.id)
+            }
+        }
+
+        return ChatPresentationRuleProjection(
+            visibleMessages: visibleMessages,
+            highlightedMessageIDs: highlightedMessageIDs
+        )
+    }
+}
+
 public enum ChatPresentationRuleEngine {
     public static let maximumQueryLength = 256
 
@@ -90,51 +169,14 @@ public enum ChatPresentationRuleEngine {
         messages: [ChatMessage],
         rules: [ChatPresentationRule]
     ) -> ChatPresentationRuleProjection {
-        let compiledRules = rules.compactMap(CompiledRule.init)
-        guard !compiledRules.isEmpty else {
-            return ChatPresentationRuleProjection(
-                visibleMessages: messages,
-                highlightedMessageIDs: []
-            )
-        }
-
-        var visibleMessages: [ChatMessage] = []
-        visibleMessages.reserveCapacity(messages.count)
-        var highlightedMessageIDs: Set<String> = []
-
-        for message in messages {
-            var hidden = false
-            var highlighted = false
-
-            for rule in compiledRules where rule.matches(message) {
-                switch rule.action {
-                case .hide:
-                    hidden = true
-                case .highlight:
-                    highlighted = true
-                }
-            }
-
-            guard !hidden else {
-                continue
-            }
-            visibleMessages.append(message)
-            if highlighted {
-                highlightedMessageIDs.insert(message.id)
-            }
-        }
-
-        return ChatPresentationRuleProjection(
-            visibleMessages: visibleMessages,
-            highlightedMessageIDs: highlightedMessageIDs
-        )
+        ChatPresentationRulePlan(rules: rules).project(messages: messages)
     }
 
-    private static func normalizedQuery(_ query: String) -> String {
+    fileprivate static func normalizedQuery(_ query: String) -> String {
         query.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private static func compileRegex(
+    fileprivate static func compileRegex(
         query: String,
         caseSensitive: Bool
     ) -> NSRegularExpression? {
@@ -142,63 +184,102 @@ public enum ChatPresentationRuleEngine {
         return try? NSRegularExpression(pattern: query, options: options)
     }
 
-    private static func folded(_ value: String) -> String {
+    fileprivate static func folded(_ value: String) -> String {
         value.folding(
             options: [.caseInsensitive, .diacriticInsensitive],
             locale: nil
         )
     }
+}
 
-    private struct CompiledRule {
-        let action: ChatPresentationRuleAction
-        let target: ChatPresentationRuleTarget
-        let matcher: (String) -> Bool
+private struct CompiledPresentationRule {
+    let action: ChatPresentationRuleAction
+    let target: ChatPresentationRuleTarget
+    let matcher: CompiledPresentationMatcher
 
-        init?(_ rule: ChatPresentationRule) {
-            guard rule.isEnabled,
-                  ChatPresentationRuleEngine.validate(rule) == nil else {
-                return nil
-            }
-            action = rule.action
-            target = rule.target
-
-            let query = ChatPresentationRuleEngine.normalizedQuery(rule.query)
-            switch rule.matchMode {
-            case .contains:
-                if rule.caseSensitive {
-                    matcher = { value in value.contains(query) }
-                } else {
-                    let foldedQuery = ChatPresentationRuleEngine.folded(query)
-                    matcher = { value in
-                        ChatPresentationRuleEngine.folded(value).contains(foldedQuery)
-                    }
-                }
-
-            case .regex:
-                guard let expression = ChatPresentationRuleEngine.compileRegex(
-                    query: query,
-                    caseSensitive: rule.caseSensitive
-                ) else {
-                    return nil
-                }
-                matcher = { value in
-                    let range = NSRange(value.startIndex..<value.endIndex, in: value)
-                    return expression.firstMatch(
-                        in: value,
-                        options: [],
-                        range: range
-                    ) != nil
-                }
-            }
+    init?(_ rule: ChatPresentationRule) {
+        guard rule.isEnabled else {
+            return nil
         }
 
-        func matches(_ message: ChatMessage) -> Bool {
-            switch target {
-            case .message:
-                matcher(message.text)
-            case .author:
-                matcher(message.author.login) || matcher(message.author.displayName)
+        let query = ChatPresentationRuleEngine.normalizedQuery(rule.query)
+        guard !query.isEmpty,
+              query.count <= ChatPresentationRuleEngine.maximumQueryLength else {
+            return nil
+        }
+
+        action = rule.action
+        target = rule.target
+
+        switch rule.matchMode {
+        case .contains:
+            if rule.caseSensitive {
+                matcher = .containsCaseSensitive(query)
+            } else {
+                matcher = .containsFolded(ChatPresentationRuleEngine.folded(query))
             }
+
+        case .regex:
+            guard let expression = ChatPresentationRuleEngine.compileRegex(
+                query: query,
+                caseSensitive: rule.caseSensitive
+            ) else {
+                return nil
+            }
+            matcher = .regex(expression)
+        }
+    }
+
+    func matches(
+        _ message: ChatMessage,
+        foldedMessageText: String?,
+        foldedAuthorLogin: String?,
+        foldedAuthorDisplayName: String?
+    ) -> Bool {
+        switch target {
+        case .message:
+            matcher.matches(
+                rawValue: message.text,
+                foldedValue: foldedMessageText
+            )
+        case .author:
+            matcher.matches(
+                rawValue: message.author.login,
+                foldedValue: foldedAuthorLogin
+            ) || matcher.matches(
+                rawValue: message.author.displayName,
+                foldedValue: foldedAuthorDisplayName
+            )
+        }
+    }
+}
+
+private enum CompiledPresentationMatcher {
+    case containsCaseSensitive(String)
+    case containsFolded(String)
+    case regex(NSRegularExpression)
+
+    var requiresFoldedValue: Bool {
+        if case .containsFolded = self {
+            return true
+        }
+        return false
+    }
+
+    func matches(rawValue: String, foldedValue: String?) -> Bool {
+        switch self {
+        case let .containsCaseSensitive(query):
+            rawValue.contains(query)
+
+        case let .containsFolded(query):
+            (foldedValue ?? ChatPresentationRuleEngine.folded(rawValue)).contains(query)
+
+        case let .regex(expression):
+            expression.firstMatch(
+                in: rawValue,
+                options: [],
+                range: NSRange(rawValue.startIndex..<rawValue.endIndex, in: rawValue)
+            ) != nil
         }
     }
 }
