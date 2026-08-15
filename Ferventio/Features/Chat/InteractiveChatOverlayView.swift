@@ -92,16 +92,17 @@ struct InteractiveChatOverlayView: View {
                 }
             }
 
-            HStack(spacing: 12) {
-                Label(
-                    prediction.totalUsers.formatted(),
-                    systemImage: "person.2"
-                )
-                Spacer(minLength: 8)
-                Label(
-                    prediction.totalChannelPoints.formatted(),
-                    systemImage: "diamond.fill"
-                )
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 12) {
+                    predictionUsersLabel(prediction)
+                    Spacer(minLength: 8)
+                    predictionPointsLabel(prediction)
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    predictionUsersLabel(prediction)
+                    predictionPointsLabel(prediction)
+                }
             }
             .font(.caption)
             .foregroundStyle(.secondary)
@@ -117,19 +118,48 @@ struct InteractiveChatOverlayView: View {
         status: String
     ) -> some View {
         VStack(alignment: .leading, spacing: 3) {
-            HStack(spacing: 6) {
-                Label(kind, systemImage: systemImage)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                Spacer(minLength: 8)
-                Text(status)
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.secondary)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 6) {
+                    kindLabel(systemImage: systemImage, kind: kind)
+                    Spacer(minLength: 8)
+                    statusLabel(status)
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    kindLabel(systemImage: systemImage, kind: kind)
+                    statusLabel(status)
+                }
             }
             Text(title)
                 .font(.subheadline.weight(.semibold))
                 .fixedSize(horizontal: false, vertical: true)
         }
+    }
+
+    private func kindLabel(systemImage: String, kind: String) -> some View {
+        Label(kind, systemImage: systemImage)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.secondary)
+    }
+
+    private func statusLabel(_ status: String) -> some View {
+        Text(status)
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(.secondary)
+    }
+
+    private func predictionUsersLabel(_ prediction: PredictionOverlay) -> some View {
+        Label(
+            prediction.totalUsers.formatted(),
+            systemImage: "person.2"
+        )
+    }
+
+    private func predictionPointsLabel(_ prediction: PredictionOverlay) -> some View {
+        Label(
+            prediction.totalChannelPoints.formatted(),
+            systemImage: "diamond.fill"
+        )
     }
 
     private func pollStatus(_ status: PollStatus) -> String {
