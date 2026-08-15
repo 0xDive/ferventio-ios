@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import UIKit
 @testable import Ferventio
 
 @MainActor
@@ -86,6 +87,45 @@ struct ChatImagePipelineTests {
         #expect(StubChatImageURLProtocol.requestCount == 1)
     }
 
+    @Test
+    func clearingCacheRejectsStaleInFlightCompletion() async throws {
+        let staleAsset = ChatImageAsset(image: UIImage(), decodedByteCost: 1)
+        let freshAsset = ChatImageAsset(image: UIImage(), decodedByteCost: 1)
+        let loader = BlockingChatImageLoader(
+            staleAsset: staleAsset,
+            freshAsset: freshAsset
+        )
+        let pipeline = makePipeline(loader: { url, session, displayScale, allowsAnimation in
+            await loader.load(
+                url: url,
+                session: session,
+                displayScale: displayScale,
+                allowsAnimation: allowsAnimation
+            )
+        })
+        let url = URL(string: "https://example.com/stale-cache.gif")!
+
+        let staleTask = Task { @MainActor in
+            await pipeline.image(for: url, allowsAnimation: false)
+        }
+        await loader.waitUntilFirstLoadStarts()
+
+        pipeline.removeAllCachedImages()
+        await loader.completeFirstLoad()
+        #expect(await staleTask.value === staleAsset)
+
+        let fresh = try #require(
+            await pipeline.image(for: url, allowsAnimation: false)
+        )
+        let cached = try #require(
+            await pipeline.image(for: url, allowsAnimation: false)
+        )
+
+        #expect(fresh === freshAsset)
+        #expect(cached === freshAsset)
+        #expect(await loader.recordedCallCount() == 2)
+    }
+
     private func makePipeline(
         data: Data,
         contentLength: Int? = nil
@@ -97,6 +137,67 @@ struct ChatImagePipelineTests {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [StubChatImageURLProtocol.self]
         return ChatImagePipeline(session: URLSession(configuration: configuration))
+    }
+
+    private func makePipeline(loader: @escaping ChatImagePipeline.Loader) -> ChatImagePipeline {
+        ChatImagePipeline(
+            session: URLSession(configuration: .ephemeral),
+            loader: loader
+        )
+    }
+}
+
+private actor BlockingChatImageLoader {
+    private let staleAsset: ChatImageAsset
+    private let freshAsset: ChatImageAsset
+    private var calls = 0
+    private var firstLoadStarted = false
+    private var firstLoadWaiters: [CheckedContinuation<Void, Never>] = []
+    private var firstLoadContinuation: CheckedContinuation<ChatImageAsset?, Never>?
+
+    init(staleAsset: ChatImageAsset, freshAsset: ChatImageAsset) {
+        self.staleAsset = staleAsset
+        self.freshAsset = freshAsset
+    }
+
+    func load(
+        url: URL,
+        session: URLSession,
+        displayScale: CGFloat,
+        allowsAnimation: Bool
+    ) async -> ChatImageAsset? {
+        calls += 1
+        guard calls == 1 else {
+            return freshAsset
+        }
+
+        return await withCheckedContinuation { continuation in
+            firstLoadContinuation = continuation
+            firstLoadStarted = true
+            let waiters = firstLoadWaiters
+            firstLoadWaiters.removeAll()
+            for waiter in waiters {
+                waiter.resume()
+            }
+        }
+    }
+
+    func waitUntilFirstLoadStarts() async {
+        guard !firstLoadStarted else {
+            return
+        }
+        await withCheckedContinuation { continuation in
+            firstLoadWaiters.append(continuation)
+        }
+    }
+
+    func completeFirstLoad() {
+        firstLoadContinuation?.resume(returning: staleAsset)
+        firstLoadContinuation = nil
+    }
+
+    func recordedCallCount() -> Int {
+        calls
     }
 }
 
