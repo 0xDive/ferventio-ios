@@ -112,7 +112,7 @@ final class ChatComposerStore {
             return draft
         }
         sentHistory = history
-        return draft
+        return pendingDrafts[channelID] ?? draft
     }
 
     func updateDraft(channelID: String?, text: String) {
