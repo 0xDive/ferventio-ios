@@ -220,6 +220,24 @@ struct ChatHistorySettingsView: View {
                     }
                     .disabled(isCloudSyncing)
 
+                    NavigationLink {
+                        CloudSettingsHistoryView(
+                            presentationPreferences: currentPresentationPreferences
+                        ) { plan, revision in
+                            applyBackupImportPlan(plan)
+                            cloudSyncStatus = String(
+                                format: cloudLocalized("history.restored"),
+                                revision
+                            )
+                        }
+                    } label: {
+                        Label(
+                            cloudLocalized("history.open"),
+                            systemImage: "clock.arrow.circlepath"
+                        )
+                    }
+                    .disabled(isCloudSyncing)
+
                     if isCloudSyncing {
                         HStack(spacing: 10) {
                             ProgressView()
