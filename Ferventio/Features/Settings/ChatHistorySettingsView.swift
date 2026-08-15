@@ -1,4 +1,5 @@
 import FerventioDomain
+import FerventioNetworking
 import Foundation
 import SwiftUI
 import UniformTypeIdentifiers
@@ -23,6 +24,11 @@ struct ChatHistorySettingsView: View {
     @State private var backupExportOmittedRuleCount = 0
     @State private var backupErrorMessage: String?
     @State private var isSaving = false
+    @State private var isCloudSyncing = false
+    @State private var cloudSyncStatus: String?
+    @State private var cloudConflictSnapshot: BackendSettingsSyncSnapshot?
+    @State private var pendingCloudUploadPayload: String?
+    @State private var showsCloudConflict = false
 
     private let initialWorkspaceSnapshot: ChatWorkspaceRegistrySnapshot
 
@@ -166,6 +172,44 @@ struct ChatHistorySettingsView: View {
                 } footer: {
                     Text(localized("backup.footer"))
                 }
+
+                Section {
+                    Button {
+                        Task { await downloadCloudBackup() }
+                    } label: {
+                        Label(
+                            cloudLocalized("download"),
+                            systemImage: "icloud.and.arrow.down"
+                        )
+                    }
+                    .disabled(isCloudSyncing)
+
+                    Button {
+                        Task { await uploadCloudBackup() }
+                    } label: {
+                        Label(
+                            cloudLocalized("upload"),
+                            systemImage: "icloud.and.arrow.up"
+                        )
+                    }
+                    .disabled(isCloudSyncing)
+
+                    if isCloudSyncing {
+                        HStack(spacing: 10) {
+                            ProgressView()
+                            Text(cloudLocalized("working"))
+                                .foregroundStyle(.secondary)
+                        }
+                    } else if let cloudSyncStatus {
+                        Label(cloudSyncStatus, systemImage: "checkmark.icloud")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                } header: {
+                    Text(cloudLocalized("section"))
+                } footer: {
+                    Text(cloudLocalized("footer"))
+                }
             }
             .navigationTitle(Text(localized("settings.title")))
             .navigationBarTitleDisplayMode(.inline)
@@ -190,7 +234,7 @@ struct ChatHistorySettingsView: View {
                             dismiss()
                         }
                     }
-                    .disabled(isSaving)
+                    .disabled(isSaving || isCloudSyncing)
                 }
             }
         }
@@ -223,6 +267,23 @@ struct ChatHistorySettingsView: View {
                     backupExportOmittedRuleCount
                 )
             )
+        }
+        .confirmationDialog(
+            cloudLocalized("conflict.title"),
+            isPresented: $showsCloudConflict,
+            titleVisibility: .visible
+        ) {
+            Button(cloudLocalized("conflict.use_cloud")) {
+                useCloudConflictSnapshot()
+            }
+            Button(cloudLocalized("conflict.overwrite"), role: .destructive) {
+                Task { await overwriteCloudConflict() }
+            }
+            Button(localized("cancel"), role: .cancel) {
+                clearCloudConflict()
+            }
+        } message: {
+            Text(cloudLocalized("conflict.message"))
         }
         .alert(
             localized("backup.error.title"),
@@ -282,13 +343,7 @@ struct ChatHistorySettingsView: View {
 
     private func prepareBackupExport() {
         do {
-            let export = try SettingsBackupBridge.capture(
-                historyPreferences: currentHistoryPreferences,
-                presentationPreferences: currentPresentationPreferences,
-                workspaceSnapshot: effectiveWorkspaceSnapshot,
-                appVersion: appVersion,
-                createdAt: currentTimestamp
-            )
+            let export = try makeBackupExport()
             let rawValue = try SettingsBackupBridge.encode(export, pretty: true)
             backupExportDocument = SettingsBackupFileDocument(rawValue: rawValue)
             backupExportOmittedRuleCount = export.omittedPresentationRuleCount
@@ -300,6 +355,16 @@ struct ChatHistorySettingsView: View {
         } catch {
             backupErrorMessage = error.localizedDescription
         }
+    }
+
+    private func makeBackupExport() throws -> SettingsBackupExportResult {
+        try SettingsBackupBridge.capture(
+            historyPreferences: currentHistoryPreferences,
+            presentationPreferences: currentPresentationPreferences,
+            workspaceSnapshot: effectiveWorkspaceSnapshot,
+            appVersion: appVersion,
+            createdAt: currentTimestamp
+        )
     }
 
     private func handleBackupImport(_ result: Result<[URL], Error>) {
@@ -324,6 +389,143 @@ struct ChatHistorySettingsView: View {
         backupExportDocument = nil
         if case let .failure(error) = result {
             backupErrorMessage = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func downloadCloudBackup() async {
+        guard !isCloudSyncing else {
+            return
+        }
+        isCloudSyncing = true
+        cloudSyncStatus = nil
+        defer { isCloudSyncing = false }
+
+        do {
+            guard let snapshot = try await SettingsSyncService.live().current() else {
+                cloudSyncStatus = cloudLocalized("empty")
+                return
+            }
+            try stageCloudSnapshot(snapshot)
+            cloudSyncStatus = String(
+                format: cloudLocalized("downloaded"),
+                snapshot.revision
+            )
+        } catch {
+            backupErrorMessage = cloudErrorMessage(error)
+        }
+    }
+
+    @MainActor
+    private func uploadCloudBackup() async {
+        guard !isCloudSyncing else {
+            return
+        }
+        isCloudSyncing = true
+        cloudSyncStatus = nil
+        defer { isCloudSyncing = false }
+
+        do {
+            let export = try makeBackupExport()
+            let payload = try SettingsBackupBridge.encode(export, pretty: false)
+            let service = SettingsSyncService.live()
+            let current = try await service.current()
+            do {
+                let snapshot = try await service.upload(
+                    payloadJSON: payload,
+                    baseRevision: current?.revision ?? 0,
+                    force: false
+                )
+                cloudSyncStatus = String(
+                    format: cloudLocalized("uploaded"),
+                    snapshot.revision
+                )
+            } catch let BackendSettingsSyncError.conflict(snapshot) {
+                cloudConflictSnapshot = snapshot
+                pendingCloudUploadPayload = payload
+                showsCloudConflict = true
+            }
+        } catch {
+            backupErrorMessage = cloudErrorMessage(error)
+        }
+    }
+
+    @MainActor
+    private func overwriteCloudConflict() async {
+        guard !isCloudSyncing,
+              let snapshot = cloudConflictSnapshot,
+              let payload = pendingCloudUploadPayload else {
+            clearCloudConflict()
+            return
+        }
+        showsCloudConflict = false
+        isCloudSyncing = true
+        cloudSyncStatus = nil
+        defer {
+            isCloudSyncing = false
+            clearCloudConflict()
+        }
+
+        do {
+            let uploaded = try await SettingsSyncService.live().upload(
+                payloadJSON: payload,
+                baseRevision: snapshot.revision,
+                force: true
+            )
+            cloudSyncStatus = String(
+                format: cloudLocalized("uploaded"),
+                uploaded.revision
+            )
+        } catch {
+            backupErrorMessage = cloudErrorMessage(error)
+        }
+    }
+
+    private func useCloudConflictSnapshot() {
+        guard let snapshot = cloudConflictSnapshot else {
+            clearCloudConflict()
+            return
+        }
+        do {
+            try stageCloudSnapshot(snapshot)
+            cloudSyncStatus = String(
+                format: cloudLocalized("downloaded"),
+                snapshot.revision
+            )
+        } catch {
+            backupErrorMessage = cloudErrorMessage(error)
+        }
+        clearCloudConflict()
+    }
+
+    private func stageCloudSnapshot(_ snapshot: BackendSettingsSyncSnapshot) throws {
+        let plan = try SettingsBackupBridge.importPlan(
+            raw: snapshot.payloadJSON,
+            existingPresentationPreferences: currentPresentationPreferences
+        )
+        applyBackupImportPlan(plan)
+    }
+
+    private func clearCloudConflict() {
+        showsCloudConflict = false
+        cloudConflictSnapshot = nil
+        pendingCloudUploadPayload = nil
+    }
+
+    private func cloudErrorMessage(_ error: Swift.Error) -> String {
+        switch error {
+        case let BackendSettingsSyncError.httpStatus(_, message):
+            return message
+        case BackendSettingsSyncError.invalidPayload:
+            return cloudLocalized("error.invalid_payload")
+        case BackendSettingsSyncError.invalidResponse,
+             BackendSettingsSyncError.malformedResponse,
+             BackendSettingsSyncError.conflict:
+            return cloudLocalized("error.generic")
+        case SettingsSyncServiceError.notAuthenticated:
+            return cloudLocalized("error.not_authenticated")
+        default:
+            return error.localizedDescription
         }
     }
 
@@ -396,6 +598,10 @@ struct ChatHistorySettingsView: View {
 
     private func localized(_ key: String.LocalizationValue) -> String {
         String(localized: key, table: "Settings")
+    }
+
+    private func cloudLocalized(_ key: String.LocalizationValue) -> String {
+        String(localized: key, table: "CloudSettings")
     }
 
     private func filtersLocalized(_ key: String.LocalizationValue) -> String {
