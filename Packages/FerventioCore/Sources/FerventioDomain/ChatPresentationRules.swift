@@ -67,9 +67,9 @@ public struct ChatPresentationRuleProjection: Equatable, Sendable {
 }
 
 public struct ChatPresentationRulePlan {
-    fileprivate let compiledRules: [CompiledPresentationRule]
-    fileprivate let needsFoldedMessageText: Bool
-    fileprivate let needsFoldedAuthor: Bool
+    private let compiledRules: [CompiledPresentationRule]
+    private let needsFoldedMessageText: Bool
+    private let needsFoldedAuthor: Bool
 
     public init(rules: [ChatPresentationRule]) {
         compiledRules = rules.compactMap(CompiledPresentationRule.init)
