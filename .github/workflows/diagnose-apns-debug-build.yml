@@ -1,0 +1,46 @@
+name: Diagnose APNs Debug Build
+
+on:
+  push:
+    branches:
+      - feat/ios-apns
+    paths:
+      - .github/workflows/diagnose-apns-debug-build.yml
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate Xcode project
+        run: xcodegen generate
+      - name: Build Debug with diagnostics
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          LOG="$RUNNER_TEMP/apns-debug-build.log"
+          xcodebuild \
+            -project Ferventio.xcodeproj \
+            -scheme Ferventio \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            build 2>&1 | tee "$LOG"
+          STATUS="${PIPESTATUS[0]}"
+          set -e
+          if [[ "$STATUS" -ne 0 ]]; then
+            grep -E '(^|[[:space:]])error:|SwiftCompile|EmitSwiftModule|fatal error' "$LOG" \
+              | tail -n 120 \
+              | while IFS= read -r line; do
+                  line="${line//'%'/'%25'}"
+                  echo "::error title=APNs Debug compile failure::$line"
+                done
+            exit "$STATUS"
+          fi
