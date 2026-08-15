@@ -16,6 +16,9 @@ final class PushNotificationCoordinator {
     @ObservationIgnored private let registrationService: any PushRegistering
     @ObservationIgnored private let authorizationService: any PushNotificationAuthorizing
     @ObservationIgnored private var lastDeviceToken: Data?
+    @ObservationIgnored private var registrationGeneration: UInt64 = 0
+    @ObservationIgnored private var pendingRegistration: PendingRegistration?
+    @ObservationIgnored private var registrationLoopRunning = false
 
     init(
         preferencesStore: PushNotificationPreferencesStore? = nil,
@@ -112,6 +115,8 @@ final class PushNotificationCoordinator {
         selfTestSucceeded = nil
         defer { isWorking = false }
 
+        registrationGeneration &+= 1
+        pendingRegistration = nil
         preferences = preferencesStore.save(
             PushNotificationPreferences(
                 enabled: false,
@@ -202,6 +207,8 @@ final class PushNotificationCoordinator {
     }
 
     func signedOut() async {
+        registrationGeneration &+= 1
+        pendingRegistration = nil
         if preferences.enabled {
             try? await registrationService.unregister()
         }
@@ -216,32 +223,72 @@ final class PushNotificationCoordinator {
         grant: AuthenticationGrant?,
         channelLogins: [String]
     ) async {
-        guard let grant, let lastDeviceToken, !isWorking else {
+        guard let grant, let lastDeviceToken else {
             if grant == nil {
                 errorMessage = localized("error.not_authenticated")
             }
             return
         }
+
+        pendingRegistration = PendingRegistration(
+            generation: registrationGeneration,
+            deviceToken: lastDeviceToken,
+            channelLogins: channelLogins,
+            preferences: preferences,
+            grant: grant
+        )
+        guard !registrationLoopRunning else {
+            return
+        }
+
+        registrationLoopRunning = true
         isWorking = true
         errorMessage = nil
         selfTestSucceeded = nil
-        defer { isWorking = false }
+        defer {
+            registrationLoopRunning = false
+            isWorking = false
+        }
 
-        do {
-            try await registrationService.register(
-                deviceToken: lastDeviceToken,
-                channelLogins: channelLogins,
-                preferences: preferences,
-                grant: grant
-            )
-            isTransportRegistered = true
-        } catch {
-            isTransportRegistered = false
-            errorMessage = error.localizedDescription
+        while let request = pendingRegistration {
+            pendingRegistration = nil
+            guard request.generation == registrationGeneration else {
+                continue
+            }
+
+            do {
+                try await registrationService.register(
+                    deviceToken: request.deviceToken,
+                    channelLogins: request.channelLogins,
+                    preferences: request.preferences,
+                    grant: request.grant
+                )
+                guard request.generation == registrationGeneration else {
+                    // A logout or disable can race with an in-flight backend register.
+                    // Remove the stale registration before allowing a newer request to run.
+                    try? await registrationService.unregister()
+                    continue
+                }
+                isTransportRegistered = true
+            } catch {
+                guard request.generation == registrationGeneration else {
+                    continue
+                }
+                isTransportRegistered = false
+                errorMessage = error.localizedDescription
+            }
         }
     }
 
     private func localized(_ key: String.LocalizationValue) -> String {
         String(localized: key, table: "PushNotifications")
     }
+}
+
+private struct PendingRegistration: Sendable {
+    let generation: UInt64
+    let deviceToken: Data
+    let channelLogins: [String]
+    let preferences: PushNotificationPreferences
+    let grant: AuthenticationGrant
 }
