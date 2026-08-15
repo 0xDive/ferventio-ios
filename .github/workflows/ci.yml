@@ -53,8 +53,47 @@ jobs:
               raise SystemExit("UserDefaults privacy reason CA92.1 is missing")
           PY
 
+      - name: Validate app icon
+        run: |
+          set -euo pipefail
+          ICON="Ferventio/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png"
+          CONTENTS="Ferventio/Resources/Assets.xcassets/AppIcon.appiconset/Contents.json"
+
+          test -f "$ICON"
+          /usr/bin/python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          contents_path = Path("Ferventio/Resources/Assets.xcassets/AppIcon.appiconset/Contents.json")
+          payload = json.loads(contents_path.read_text(encoding="utf-8"))
+          images = payload.get("images", [])
+          expected = {
+              "filename": "AppIcon-1024.png",
+              "idiom": "universal",
+              "platform": "ios",
+              "size": "1024x1024",
+          }
+          if expected not in images:
+              raise SystemExit("AppIcon Contents.json does not declare the universal 1024px icon")
+          PY
+
+          width="$(sips -g pixelWidth "$ICON" | awk '/pixelWidth:/ {print $2}')"
+          height="$(sips -g pixelHeight "$ICON" | awk '/pixelHeight:/ {print $2}')"
+          alpha="$(sips -g hasAlpha "$ICON" | awk '/hasAlpha:/ {print $2}')"
+          [[ "$width" == "1024" && "$height" == "1024" ]]
+          [[ "$alpha" == "no" ]]
+
       - name: Generate Xcode project
         run: xcodegen generate
+
+      - name: Validate release build settings
+        run: |
+          set -euo pipefail
+          SETTINGS="$(xcodebuild -project Ferventio.xcodeproj -scheme Ferventio -configuration Release -showBuildSettings)"
+          grep -Fq "ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon" <<< "$SETTINGS"
+          grep -Fq "MARKETING_VERSION = 0.1.0" <<< "$SETTINGS"
+          grep -Fq "CURRENT_PROJECT_VERSION = 1" <<< "$SETTINGS"
+          grep -Fq "PRODUCT_BUNDLE_IDENTIFIER = io.ferventio.ios" <<< "$SETTINGS"
 
       - name: Build application
         run: |
@@ -75,6 +114,25 @@ jobs:
             -destination 'generic/platform=iOS' \
             CODE_SIGNING_ALLOWED=NO \
             build
+
+      - name: Build unsigned release archive
+        run: |
+          set -euo pipefail
+          ARCHIVE_PATH="${RUNNER_TEMP}/Ferventio.xcarchive"
+          xcodebuild \
+            -project Ferventio.xcodeproj \
+            -scheme Ferventio \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$ARCHIVE_PATH" \
+            CODE_SIGNING_ALLOWED=NO \
+            archive
+
+          APP_PLIST="$ARCHIVE_PATH/Products/Applications/Ferventio.app/Info.plist"
+          test -f "$APP_PLIST"
+          [[ "$(plutil -extract CFBundleShortVersionString raw "$APP_PLIST")" == "0.1.0" ]]
+          [[ "$(plutil -extract CFBundleVersion raw "$APP_PLIST")" == "1" ]]
+          [[ "$(plutil -extract CFBundleIdentifier raw "$APP_PLIST")" == "io.ferventio.ios" ]]
 
       - name: Select iOS Simulator
         run: |
