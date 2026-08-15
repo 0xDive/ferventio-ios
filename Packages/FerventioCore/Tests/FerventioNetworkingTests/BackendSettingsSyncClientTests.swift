@@ -120,6 +120,94 @@ struct BackendSettingsSyncClientTests {
         #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer session-token")
     }
 
+    @Test
+    func historyDecodesRevisionsAndAuthenticatesRequest() async throws {
+        let state = URLProtocolState()
+        let session = makeSession(state: state) { _ in
+            let body = """
+            {
+              "data": [
+                {
+                  "revision": 5,
+                  "updatedAt": "2026-08-15T10:00:00Z",
+                  "updatedByInstallationId": "installation",
+                  "appVersion": "0.1.0",
+                  "contentHash": "\(String(repeating: "d", count: 64))"
+                },
+                {
+                  "revision": 4,
+                  "updatedAt": "2026-08-15T09:00:00Z",
+                  "updatedByInstallationId": "other-installation",
+                  "appVersion": null,
+                  "contentHash": "\(String(repeating: "e", count: 64))"
+                }
+              ]
+            }
+            """
+            return (200, Data(body.utf8))
+        }
+        let client = BackendSettingsSyncClient(
+            baseURL: URL(string: "https://ferventio.example")!,
+            session: session
+        )
+
+        let entries = try await client.history(
+            device: device,
+            credential: credential
+        )
+
+        #expect(entries.map(\.revision) == [5, 4])
+        #expect(entries[0].appVersion == "0.1.0")
+        #expect(entries[1].updatedByInstallationID == "other-installation")
+        let request = try #require(state.lastRequest)
+        #expect(request.httpMethod == "GET")
+        #expect(request.url?.path == "/v1/sync/settings/history")
+        #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer session-token")
+        #expect(request.value(forHTTPHeaderField: "X-Installation-ID") == "installation")
+        #expect(request.value(forHTTPHeaderField: "X-Device-Secret") == "device-secret")
+    }
+
+    @Test
+    func restorePostsSelectedRevisionAndDecodesNewSnapshot() async throws {
+        let state = URLProtocolState()
+        let session = makeSession(state: state) { _ in
+            let body = """
+            {
+              "revision": 8,
+              "updatedAt": "2026-08-15T11:00:00Z",
+              "updatedByInstallationId": "installation",
+              "appVersion": "0.1.0",
+              "contentHash": "\(String(repeating: "f", count: 64))",
+              "payload": {
+                "format": "ferventio-settings-backup",
+                "formatVersion": 2,
+                "appVersion": "0.1.0",
+                "contentHash": "\(String(repeating: "f", count: 64))",
+                "content": {"settings": {"themeMode": "LIGHT"}}
+              }
+            }
+            """
+            return (200, Data(body.utf8))
+        }
+        let client = BackendSettingsSyncClient(
+            baseURL: URL(string: "https://ferventio.example")!,
+            session: session
+        )
+
+        let snapshot = try await client.restore(
+            revision: 4,
+            device: device,
+            credential: credential
+        )
+
+        #expect(snapshot.revision == 8)
+        #expect(snapshot.payloadJSON.contains("\"formatVersion\":2") == true)
+        let request = try #require(state.lastRequest)
+        #expect(request.httpMethod == "POST")
+        #expect(request.url?.path == "/v1/sync/settings/restore/4")
+        #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer session-token")
+    }
+
     private var device: DeviceIdentity {
         DeviceIdentity(
             installationID: "installation",
