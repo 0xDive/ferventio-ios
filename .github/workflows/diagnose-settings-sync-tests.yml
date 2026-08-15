@@ -1,0 +1,40 @@
+name: Diagnose Settings Sync Tests
+
+on:
+  push:
+    branches:
+      - feat/ios-foundation
+    paths:
+      - .github/workflows/diagnose-settings-sync-tests.yml
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: macos-15
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Run settings sync tests with diagnostics
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          LOG="$RUNNER_TEMP/settings-sync-tests.log"
+          swift test \
+            --package-path Packages/FerventioCore \
+            --filter BackendSettingsSyncClientTests 2>&1 | tee "$LOG"
+          STATUS="${PIPESTATUS[0]}"
+          set -e
+          if [[ "$STATUS" -ne 0 ]]; then
+            LOG="$LOG" /usr/bin/python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          text = Path(os.environ["LOG"]).read_text(encoding="utf-8", errors="replace")[-12000:]
+          escaped = text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+          print(f"::error title=Settings sync core test failure::{escaped}")
+          PY
+            exit "$STATUS"
+          fi
