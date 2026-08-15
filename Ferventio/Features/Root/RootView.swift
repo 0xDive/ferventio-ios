@@ -643,10 +643,20 @@ struct RootView: View {
 
     @MainActor
     private func routePendingPushIfPossible() async {
-        guard environment.state == .signedIn,
-              let route = pendingPushRoute else {
+        guard environment.state == .signedIn else {
             return
         }
+
+        let route: PushNotificationRoute
+        if let pendingPushRoute {
+            route = pendingPushRoute
+            _ = PushNotificationRouteBuffer.shared.takeLatest()
+        } else if let bufferedRoute = PushNotificationRouteBuffer.shared.takeLatest() {
+            route = bufferedRoute
+        } else {
+            return
+        }
+
         pendingPushRoute = nil
         showsInteractiveManagement = false
 
